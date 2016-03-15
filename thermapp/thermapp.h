@@ -164,9 +164,9 @@ int thermapp_GetImage(ThermApp *thermapp, short *ImgData);
 
 int thermapp_ParsingUsbPacket(ThermApp *thermapp, short *ImgData);
 
-void thermapp_setGain(ThermApp *thermapp, unsigned short gain);
+//void thermapp_setGain(ThermApp *thermapp, unsigned short gain);
 
-unsigned short thermapp_getGain(ThermApp *thermapp);
+//unsigned short thermapp_getGain(ThermApp *thermapp);
 
 int thermapp_getId(ThermApp *thermapp);
 
@@ -174,9 +174,9 @@ float thermapp_getTemperature(ThermApp *thermapp);
 
 unsigned short thermapp_getFrameCount(ThermApp *thermapp);
 
-unsigned short thermapp_getDCoffset(ThermApp *thermapp);
+//unsigned short thermapp_getDCoffset(ThermApp *thermapp);
 
-void thermapp_setDCoffset(ThermApp *thermapp, unsigned short offset);
+//void thermapp_setDCoffset(ThermApp *thermapp, unsigned short offset);
 
 int thermapp_CalibrateFile(ThermApp *thermapp, FILE *file);
 

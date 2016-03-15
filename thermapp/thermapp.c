@@ -215,7 +215,7 @@ void THERMAPP_CALL thermapp_PipeWrite(unsigned char *buf, uint32_t len, void *ct
         //FIXME: w_len return can be smaller len
 		if(w_len < len){
             printf("pipe write len smaller. len: %d w_len: %d\n", len, w_len);
-		}	
+		}
 	}
 }
 
@@ -404,6 +404,7 @@ int thermapp_FrameRequest_thread(ThermApp *thermapp){
 }
 
 
+/*
 void thermapp_setGain(ThermApp *thermapp, unsigned short gain){
     //thermapp->cfg->gain = gain;
 }
@@ -411,6 +412,7 @@ void thermapp_setGain(ThermApp *thermapp, unsigned short gain){
 unsigned short thermapp_getGain(ThermApp *thermapp){
     //return thermapp->cfg->gain;
 }
+*/
 
 int thermapp_getId(ThermApp *thermapp){
 	return thermapp->id;
@@ -427,13 +429,15 @@ unsigned short thermapp_getFrameCount(ThermApp *thermapp){
 	return thermapp->frame_count;
 }
 
+/*
 unsigned short thermapp_getDCoffset(ThermApp *thermapp){
-   // return thermapp->cfg->DCoffset;
+  // return thermapp->cfg->DCoffset;
 }
 
 void thermapp_setDCoffset(ThermApp *thermapp, unsigned short offset){
    // thermapp->cfg->DCoffset = offset;
 }
+*/
 
 /*
 int thermapp_LoadCalibrate(ThermApp *thermapp, int id){

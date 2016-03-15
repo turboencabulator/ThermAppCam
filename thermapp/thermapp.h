@@ -20,18 +20,14 @@
 #define THERMAPP_H_
 
 #include <pthread.h>
+#include <stdio.h>
 
-#include "libusb-1.0/libusb.h"
+#include <libusb.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__) || defined(_WIN32_WCE)
 #define THERMAPP_CALL WINAPI
 #else
 #define THERMAPP_CALL
-#endif
-
-
-#ifdef __cplusplus
-extern "C" {
 #endif
 
 
@@ -190,10 +186,6 @@ int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *c
 int thermapp_cancel_async(ThermApp *thermapp);
 
 int thermapp_Close(ThermApp *thermapp);
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif /* THERMAPP_H_ */

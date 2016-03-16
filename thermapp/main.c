@@ -116,6 +116,11 @@ int main(int argc, char *argv[]) {
 
     double gain_cal = 0.1;
     double offset_cal = 0;
+    if (argc > 3) {
+      sscanf(argv[1], "%lf", &gain_cal);
+      sscanf(argv[2], "%lf", &offset_cal);
+    }
+
     while (1) {
       if (thermapp_GetImage(therm, frame)) {
         int i;

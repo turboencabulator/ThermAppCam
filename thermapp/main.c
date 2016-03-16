@@ -127,7 +127,10 @@ int main(int argc, char *argv[]) {
       if (thermapp_GetImage(therm, frame)) {
         int i;
         for (i = 0; i < PIXELS_DATA_SIZE; i++) {
-          int x = (frame[i] * gain_cal) / 256 + offset_cal;
+#ifdef DEBUG
+          printf("frame[i] = %d", (int)frame[i]);
+#endif
+          int x = (frame[i] * gain_cal) + offset_cal;
           if (x >= 255) {
             img[i] = 255;
           } else if (x <= 0) {

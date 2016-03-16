@@ -114,11 +114,13 @@ int main(int argc, char *argv[]) {
     short frame[PIXELS_DATA_SIZE];
     __u8 img[PIXELS_DATA_SIZE];
 
+    double pre_offset_cal = 0;
     double gain_cal = 0.1;
     double offset_cal = 0;
-    if (argc >= 3) {
+    if (argc >= 4) {
       sscanf(argv[1], "%lf", &gain_cal);
       sscanf(argv[2], "%lf", &offset_cal);
+      sscanf(argv[3], "%lf", &pre_offset_cal);
     }
 
     while (1) {

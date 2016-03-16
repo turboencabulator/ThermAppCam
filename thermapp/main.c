@@ -117,40 +117,18 @@ int main(int argc, char *argv[]) {
                           &framesize)) {
         printf("unable to guess correct settings for format '%d'\n", FRAME_FORMAT);
     }
-    __u8 *buffer;
-    __u8 *check_buffer;
-    buffer=(__u8*)malloc(sizeof(__u8)*framesize);
-    check_buffer=(__u8*)malloc(sizeof(__u8)*framesize);
 
     short frame[PIXELS_DATA_SIZE];
+    __u8 img[PIXELS_DATA_SIZE];
+
     while (1) {
       if (thermapp_GetImage(therm, frame)) {
-        int pix_lim, i;
-
-        unsigned char img[PIXELS_DATA_SIZE];
-
+        int i;
         for (i = 0; i < PIXELS_DATA_SIZE; i++) {
-            pix_lim = frame[i];
-
-            if (pix_lim > 255) {
-                pix_lim = 255;
-            } else if (pix_lim < 0) {
-                pix_lim = 0;
-            }
-
-            img[i] = (unsigned char) pix_lim;
+          img[i] = frame[i] / 256;
         }
 
-        memset(buffer, 0, framesize);
-        memset(check_buffer, 0, framesize);
-        //buffer = img;
-
-        for (i = 0; i < framesize; ++i) {
-            buffer[i] = img[i];
-            check_buffer[i] = 0;
-        }
-
-        write(fdwr, buffer, framesize);
+        write(fdwr, img, PIXELS_DATA_SIZE);
       }
       sleep(100);
     }

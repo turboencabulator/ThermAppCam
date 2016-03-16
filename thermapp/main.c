@@ -114,7 +114,7 @@ int main(int argc, char *argv[]) {
     short frame[PIXELS_DATA_SIZE];
     __u8 img[PIXELS_DATA_SIZE];
 
-    double gain_cal = 80;
+    double gain_cal = 0.1;
     double offset_cal = 0;
     while (1) {
       if (thermapp_GetImage(therm, frame)) {

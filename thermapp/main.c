@@ -121,11 +121,13 @@ int main(int argc, char *argv[]) {
     short frame[PIXELS_DATA_SIZE];
     __u8 img[PIXELS_DATA_SIZE];
 
+    double gain_cal = 1;
+    double offset_cal = 80;
     while (1) {
       if (thermapp_GetImage(therm, frame)) {
         int i;
         for (i = 0; i < PIXELS_DATA_SIZE; i++) {
-          img[i] = frame[i] / 256;
+          img[i] = (frame[i] * gain_cal) / 256 + offset_cal;
         }
 
         write(fdwr, img, PIXELS_DATA_SIZE);

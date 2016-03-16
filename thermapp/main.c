@@ -130,7 +130,6 @@ int main(int argc, char *argv[]) {
 
         write(fdwr, img, PIXELS_DATA_SIZE);
       }
-      sleep(100);
     }
 
     close(fdwr);

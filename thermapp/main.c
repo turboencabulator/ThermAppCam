@@ -88,9 +88,7 @@ int main(int argc, char *argv[]) {
     memset(&vid_format, 0, sizeof(vid_format));
 
     ret_code = ioctl(fdwr, VIDIOC_G_FMT, &vid_format);
-#ifdef DEBUG
-    print_format(&vid_format);
-#endif
+
     size_t framesize;
     size_t linewidth;
     vid_format.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
@@ -105,11 +103,6 @@ int main(int argc, char *argv[]) {
     ret_code = ioctl(fdwr, VIDIOC_S_FMT, &vid_format);
 
     //assert(ret_code != -1);
-
-#ifdef DEBUG
-    printf("frame: format=%d\tsize=%d\n", FRAME_FORMAT, framesize);
-    print_format(&vid_format);
-#endif
 
     if(!format_properties(vid_format.fmt.pix.pixelformat,
                           vid_format.fmt.pix.width, vid_format.fmt.pix.height,

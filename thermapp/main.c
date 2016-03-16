@@ -130,7 +130,7 @@ int main(int argc, char *argv[]) {
 #ifdef DEBUG
           printf("frame[i] = %d", (int)frame[i]);
 #endif
-          int x = (frame[i] * gain_cal) + offset_cal;
+          int x = ((frame[i] + pre_offset_cal) * gain_cal) + offset_cal;
           if (x >= 255) {
             img[i] = 255;
           } else if (x <= 0) {

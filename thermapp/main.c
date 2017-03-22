@@ -13,8 +13,8 @@
 #define VIDEO_DEVICE "/dev/video0"
 #define FRAME_WIDTH  384
 #define FRAME_HEIGHT 288
-#define FRAME_FORMAT V4L2_PIX_FMT_GREY
-
+//#define FRAME_FORMAT V4L2_PIX_FMT_GREY
+#define FRAME_FORMAT V4L2_PIX_FMT_YUV420
 #define ROUND_UP_2(num) (((num)+1)&~1)
 #define ROUND_UP_4(num) (((num)+3)&~3)
 #define ROUND_UP_8(num)  (((num)+7)&~7)
@@ -30,6 +30,10 @@ int format_properties(const unsigned int format,
     unsigned int lw, fw;
     switch(format) {
     case V4L2_PIX_FMT_YUV420:
+        lw = width; /* ??? */
+        fw = ROUND_UP_4 (width) * ROUND_UP_2 (height);
+        fw += 2 * ((ROUND_UP_8 (width) / 2) * (ROUND_UP_2 (height) / 2));
+        break;
     case V4L2_PIX_FMT_YVU420:
         lw = width; /* ??? */
         fw = ROUND_UP_4 (width) * ROUND_UP_2 (height);
@@ -42,7 +46,7 @@ int format_properties(const unsigned int format,
         lw = (ROUND_UP_2 (width) * 2);
         fw = lw * height;
         break;
-    case V4L2_PIX_FMT_GREY:
+    case V4L2_PIX_FMT_Y10:
         fprintf(stdout,"S/W\n");
         lw = width;
         fw = width * height;
@@ -112,35 +116,86 @@ int main(int argc, char *argv[]) {
     }
 
     short frame[PIXELS_DATA_SIZE];
-    __u8 img[PIXELS_DATA_SIZE];
-
+    uint8_t img[165888];
     double pre_offset_cal = 0;
-    double gain_cal = 0.1;
+    double gain_cal = 1;
     double offset_cal = 0;
-    if (argc >= 4) {
-      sscanf(argv[1], "%lf", &gain_cal);
-      sscanf(argv[2], "%lf", &offset_cal);
-      sscanf(argv[3], "%lf", &pre_offset_cal);
+    int flipv = 0;
+    if (argc >= 2) {
+	flipv = *argv[1];
+    }
+	// get cal
+	printf("Calibrating... cover the lens!\n");
+    long meancal = 0;
+    short frame1[PIXELS_DATA_SIZE];
+    int d_frame1[PIXELS_DATA_SIZE];
+    int image_cal[PIXELS_DATA_SIZE];
+    int deadpixel_map[PIXELS_DATA_SIZE] = { 0 };
+    while(!thermapp_GetImage(therm, frame1));
+    while(!thermapp_GetImage(therm, frame1));
+
+    for(int i = 0; i < PIXELS_DATA_SIZE; i++){
+        d_frame1[i] = frame1[i];
     }
 
+    for(int i = 0; i < 50; i++){
+	printf("Captured calibration frame %d/50. Keep lens covered.\n", i+1);
+        while(!thermapp_GetImage(therm, frame1));
+
+        for(int j = 0; j < PIXELS_DATA_SIZE; j++){
+            d_frame1[j] += frame1[j];
+        }
+    }
+
+    for(int i = 0; i < PIXELS_DATA_SIZE; i++){
+        image_cal[i] = d_frame1[i] / 50;
+	meancal+=image_cal[i];
+    }
+    meancal = meancal / PIXELS_DATA_SIZE;
+	// record the dead pixels
+    for(int i = 0; i < PIXELS_DATA_SIZE; i++){
+        if ((image_cal[i] > meancal + 250) || (image_cal[i] < meancal - 250)) {
+		printf("Dead pixel ID: %d (%d vs %li)\n", i, image_cal[i], meancal);
+		deadpixel_map[i] = 1;
+	}
+    }
+
+	// end of get cal
+	printf("Calibration finished\n");
     while (1) {
       if (thermapp_GetImage(therm, frame)) {
         int i;
-        for (i = 0; i < PIXELS_DATA_SIZE; i++) {
-#ifdef DEBUG
-          printf("frame[i] = %d", (int)frame[i]);
-#endif
-          int x = ((frame[i] + pre_offset_cal) * gain_cal) + offset_cal;
-          if (x >= 255) {
-            img[i] = 255;
-          } else if (x <= 0) {
-            img[i] = 0;
-          } else {
-            img[i] = x;
-          }
+	int frameMax = ((frame[0] + pre_offset_cal - image_cal[0]) * gain_cal) + offset_cal;
+	int frameMin = ((frame[0] + pre_offset_cal - image_cal[0]) * gain_cal) + offset_cal;
+        for (i = 0; i < PIXELS_DATA_SIZE; i++) { // get the min and max values
+		// only bother if the pixel isn't dead
+		if (!deadpixel_map[i]) {
+			int x = ((frame[i] + pre_offset_cal - image_cal[i]) * gain_cal) + offset_cal;
+			if (x > frameMax) {
+				frameMax = x;
+			}
+			if (x < frameMin) {
+				frameMin = x;
+			}
+		}
+	}
+	// second time through, this time actually scaling data
+	for (i = 0; i < PIXELS_DATA_SIZE; i++) {
+          	int x = ((frame[i] + pre_offset_cal - image_cal[i]) * gain_cal) + offset_cal;
+		if (deadpixel_map[i]) {
+			x = ((frame[i-1] + pre_offset_cal - image_cal[i-1]) * gain_cal) + offset_cal;
+		}
+		x = (((double)x - frameMin)/(frameMax - frameMin))*255;
+		if (flipv) {
+			img[PIXELS_DATA_SIZE - ((i/384)+1)*384 + i%384] = x; 
+		} else {
+			img[PIXELS_DATA_SIZE - 1 - (PIXELS_DATA_SIZE - ((i/384)+1)*384 + i%384)] = x;
+		}
         }
-
-        write(fdwr, img, PIXELS_DATA_SIZE);
+	for (i = PIXELS_DATA_SIZE; i < 165888; i++) {
+		img[i] = 128;
+	}
+        write(fdwr, img, 165888);
       }
     }
 

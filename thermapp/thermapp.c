@@ -237,15 +237,15 @@ void *thermapp_ThreadPipeRead(void *ctx)
 			thermapp->is_NewFrame = FALSE;
 			pthread_mutex_lock(&thermapp->mutex_thermapp);
 			for (actual_length = 0; actual_length < (PACKET_SIZE); ) {
-				len = read(thermapp->fd_pipe[0], (void *)(thermapp->therm_packet) + actual_length, (PACKET_SIZE) - actual_length);
+				len = read(thermapp->fd_pipe[0], (char *)(thermapp->therm_packet) + actual_length, (PACKET_SIZE) - actual_length);
 				if (len <= 0) {
 					fprintf(stderr, "read thermapp_ThreadPipeRead()\n");
 					perror("fifo pipe read");
 					pthread_mutex_unlock(&thermapp->mutex_thermapp);
 					break;
 				}
-			actual_length += len;
-			//fprintf(stderr, "len: %d, actual_length: %d\n", len, actual_length);
+				actual_length += len;
+				//fprintf(stderr, "len: %d, actual_length: %d\n", len, actual_length);
 			}
 
 			// fprintf(stderr, "len: %d, actual_length: %d\n", len, actual_length);

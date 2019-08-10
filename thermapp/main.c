@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
 	int ret_code = ioctl(fdwr, VIDIOC_QUERYCAP, &vid_caps);
 	assert(ret_code != -1);
 
-	memset(&vid_format, 0, sizeof(vid_format));
+	memset(&vid_format, 0, sizeof vid_format);
 
 	ret_code = ioctl(fdwr, VIDIOC_G_FMT, &vid_format);
 

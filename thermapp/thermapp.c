@@ -36,22 +36,22 @@ ThermApp *thermapp_initUSB(void)
 {
 	//fprintf(stderr, "malloc thermapp_initUSB\n");
 
-	ThermApp *thermapp = (ThermApp *)malloc(sizeof(ThermApp));
+	ThermApp *thermapp = malloc(sizeof *thermapp);
 	if (thermapp == NULL) {
 		fprintf(stderr, "Can't allocate thermapp\n");
 		return NULL;
 	}
 
-	memset(thermapp, 0, sizeof(ThermApp));
+	memset(thermapp, 0, sizeof *thermapp);
 
-	thermapp->cfg = (struct cfg_packet *)malloc(sizeof(struct cfg_packet));
+	thermapp->cfg = malloc(sizeof *thermapp->cfg);
 	if (thermapp->cfg == NULL) {
 		free(thermapp);
 		fprintf(stderr, "Can't allocate cfg_packet\n");
 		return NULL;
 	}
 
-	thermapp->therm_packet = malloc(sizeof(thermapp_packet));
+	thermapp->therm_packet = malloc(sizeof *thermapp->therm_packet);
 	if (thermapp->therm_packet == NULL) {
 		free(thermapp->cfg);
 		free(thermapp);
@@ -59,7 +59,7 @@ ThermApp *thermapp_initUSB(void)
 		return NULL;
 	}
 
-	if (sizeof(*thermapp->therm_packet) != PACKET_SIZE) {
+	if (sizeof *thermapp->therm_packet != PACKET_SIZE) {
 		free(thermapp->cfg);
 		free(thermapp);
 		fprintf(stderr, "thermapp_packet not equal PACKET_SIZE\n");
@@ -225,7 +225,7 @@ void *thermapp_ThreadPipeRead(void *ctx)
 	puts("thermapp_ThreadPipeRead run\n");
 	while (current_status == THERMAPP_RUNNING) {
 
-		if ((len = read(thermapp->fd_pipe[0], &FrameHeaderStart, sizeof(FrameHeaderStart))) <= 0) {
+		if ((len = read(thermapp->fd_pipe[0], &FrameHeaderStart, sizeof FrameHeaderStart)) <= 0) {
 			fprintf(stderr, "read thermapp_ThreadPipeRead()\n");
 			perror("fifo pipe read");
 			break;
@@ -252,7 +252,7 @@ void *thermapp_ThreadPipeRead(void *ctx)
 
 			// fprintf(stderr, "len: %d, actual_length: %d\n", len, actual_length);
 			//fprintf(stderr, "FRAME------------->");
-			if (read(thermapp->fd_pipe[0], &FrameHeaderStop, sizeof(FrameHeaderStop)) <= 0) {
+			if (read(thermapp->fd_pipe[0], &FrameHeaderStop, sizeof FrameHeaderStop) <= 0) {
 				fprintf(stderr, "read thermapp_ThreadPipeRead()\n");
 				perror("fifo pipe read");
 				pthread_mutex_unlock(&thermapp->mutex_thermapp);
@@ -447,7 +447,7 @@ static int thermapp_alloc_transfer_out(ThermApp *thermapp)
 
 	printf("libusb_fill_bulk_transfer out \n");
 	libusb_fill_bulk_transfer(thermapp->transfer_out, thermapp->dev, LIBUSB_ENDPOINT_OUT | 2,
-	                          (unsigned char *)thermapp->cfg, sizeof(*thermapp->cfg), transfer_cb_out, thermapp, -1);
+	                          (unsigned char *)thermapp->cfg, sizeof *thermapp->cfg, transfer_cb_out, thermapp, -1);
 
 	printf("libusb_submit_transfer out \n");
 	r = libusb_submit_transfer(thermapp->transfer_out);
@@ -511,15 +511,13 @@ static int _thermapp_alloc_async_buffers(ThermApp *thermapp)
 		return -1;
 
 	if (!thermapp->xfer) {
-		thermapp->xfer = calloc(DEFAULT_BUF_NUMBER + (DEFAULT_BUF_REMAIN != 0),
-		                        sizeof(struct libusb_transfer *));
+		thermapp->xfer = calloc(DEFAULT_BUF_NUMBER + (DEFAULT_BUF_REMAIN != 0), sizeof *thermapp->xfer);
 		for (i = 0; i < DEFAULT_BUF_NUMBER + (DEFAULT_BUF_REMAIN != 0); i++)
 			thermapp->xfer[i] = libusb_alloc_transfer(0);
 	}
 
 	if (!thermapp->xfer_buf) {
-		thermapp->xfer_buf = calloc(DEFAULT_BUF_NUMBER + (DEFAULT_BUF_REMAIN != 0),
-		                            sizeof(unsigned char *));
+		thermapp->xfer_buf = calloc(DEFAULT_BUF_NUMBER + (DEFAULT_BUF_REMAIN != 0), sizeof *thermapp->xfer_buf);
 		for (i = 0; i < DEFAULT_BUF_NUMBER; i++)
 			thermapp->xfer_buf[i] = malloc(DEFAULT_BUF_LENGTH);
 #if (DEFAULT_BUF_REMAIN != 0)

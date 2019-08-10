@@ -32,19 +32,19 @@ int format_properties(const unsigned int format,
 	switch (format) {
 	case V4L2_PIX_FMT_YUV420:
 		lw = width; /* ??? */
-		fw = ROUND_UP_4 (width) * ROUND_UP_2 (height);
-		fw += 2 * ((ROUND_UP_8 (width) / 2) * (ROUND_UP_2 (height) / 2));
+		fw = ROUND_UP_4(width) * ROUND_UP_2(height);
+		fw += 2 * ((ROUND_UP_8(width) / 2) * (ROUND_UP_2(height) / 2));
 		break;
 	case V4L2_PIX_FMT_YVU420:
 		lw = width; /* ??? */
-		fw = ROUND_UP_4 (width) * ROUND_UP_2 (height);
-		fw += 2 * ((ROUND_UP_8 (width) / 2) * (ROUND_UP_2 (height) / 2));
+		fw = ROUND_UP_4(width) * ROUND_UP_2(height);
+		fw += 2 * ((ROUND_UP_8(width) / 2) * (ROUND_UP_2(height) / 2));
 		break;
 	case V4L2_PIX_FMT_UYVY:
 	case V4L2_PIX_FMT_Y41P:
 	case V4L2_PIX_FMT_YUYV:
 	case V4L2_PIX_FMT_YVYU:
-		lw = (ROUND_UP_2 (width) * 2);
+		lw = (ROUND_UP_2(width) * 2);
 		fw = lw * height;
 		break;
 	case V4L2_PIX_FMT_Y10:

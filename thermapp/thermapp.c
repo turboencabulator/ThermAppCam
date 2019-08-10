@@ -490,7 +490,7 @@ int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *c
 	                          sizeof *thermapp->cfg,
 	                          transfer_cb_out,
 	                          thermapp,
-	                          -1);
+	                          0);
 	r = libusb_submit_transfer(thermapp->transfer_out);
 
 	libusb_fill_bulk_transfer(thermapp->transfer_in,

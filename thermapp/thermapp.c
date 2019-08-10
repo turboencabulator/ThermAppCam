@@ -188,7 +188,7 @@ void THERMAPP_CALL thermapp_PipeWrite(unsigned char *buf, uint32_t len, void *ct
 	//fprintf(stderr, "therm_callback\n");
 	unsigned int w_len;
 
-	if (ctx) {
+	if (len && ctx) {
 		if ((w_len = write(*(int *)ctx, buf, len)) <= 0) {
 			perror("fifo write");
 		}

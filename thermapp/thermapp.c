@@ -547,11 +547,10 @@ static int _thermapp_alloc_async_buffers(ThermApp *thermapp)
 		                            sizeof(unsigned char *));
 		for (i = 0; i < DEFAULT_BUF_NUMBER; i++)
 			thermapp->xfer_buf[i] = malloc(DEFAULT_BUF_LENGTH);
-	}
-
 #if (DEFAULT_BUF_REMAIN != 0)
-	thermapp->xfer_buf[i] = malloc(DEFAULT_BUF_REMAIN);
+		thermapp->xfer_buf[i] = malloc(DEFAULT_BUF_REMAIN);
 #endif
+	}
 
 	return 0;
 }
@@ -640,6 +639,7 @@ int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *c
 	}
 
 #if (DEFAULT_BUF_REMAIN != 0)
+	fprintf(stderr, "libusb_fill: %d\n", i);
 	libusb_fill_bulk_transfer(thermapp->xfer[i],
 	                          thermapp->dev,
 	                          LIBUSB_ENDPOINT_IN | 1,

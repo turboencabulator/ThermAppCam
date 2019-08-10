@@ -67,7 +67,7 @@ ThermApp *thermapp_initUSB(void)
 	}
 
 	//Initialize data struct
-	// this init data was recieved from usbmonitor
+	// this init data was received from usbmonitor
 	thermapp->cfg->none_volatile_data0 = 0xa5a5a5a5;//it's preamble of cfg_packet
 	thermapp->cfg->none_volatile_data1 = 0xa5d5a5a5;
 	thermapp->cfg->modes = 0x0002; //test pattern low
@@ -686,7 +686,7 @@ int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *c
 	thermapp_free_transfer_out(thermapp);
 
 	_thermapp_free_async_buffers(thermapp);
-	fprintf(stderr, "_thermapp_free_async_buffers complate\n");
+	fprintf(stderr, "_thermapp_free_async_buffers complete\n");
 
 	thermapp->async_status = next_status;
 

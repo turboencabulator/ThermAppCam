@@ -60,6 +60,7 @@ ThermApp *thermapp_initUSB(void)
 	}
 
 	if (sizeof *thermapp->therm_packet != PACKET_SIZE) {
+		free(thermapp->therm_packet);
 		free(thermapp->cfg);
 		free(thermapp);
 		fprintf(stderr, "thermapp_packet not equal PACKET_SIZE\n");
@@ -93,6 +94,7 @@ ThermApp *thermapp_initUSB(void)
 
 	//Init libusb
 	if (libusb_init(&thermapp->ctx) < 0) {
+		free(thermapp->therm_packet);
 		free(thermapp->cfg);
 		free(thermapp);
 		fprintf(stderr, "failed to initialize libusb\n");
@@ -108,6 +110,7 @@ ThermApp *thermapp_initUSB(void)
 
 	//Make fifo pipe
 	if (pipe(thermapp->fd_pipe) == -1) {
+		free(thermapp->therm_packet);
 		free(thermapp->cfg);
 		free(thermapp);
 		perror("pipe");

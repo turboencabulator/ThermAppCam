@@ -39,11 +39,6 @@
 #define FRAME_START_HEADER  (0xa5d5a5a5)
 #define FRAME_STOP_HEADER   (0xa5a5a5a5)
 
-//My Banana Pi works fine only at these settings
-#define DEFAULT_BUF_LENGTH (16384) /* len must be multiple of 512 */
-#define DEFAULT_BUF_NUMBER (PACKET_SIZE / (DEFAULT_BUF_LENGTH))
-#define DEFAULT_BUF_REMAIN (((PACKET_SIZE - (DEFAULT_BUF_LENGTH * DEFAULT_BUF_NUMBER)) + 511) & ~511)
-
 #define BULK_TIMEOUT 0
 
 #ifndef FALSE
@@ -121,16 +116,12 @@ typedef struct thermapp {
 	libusb_context *ctx;
 	struct libusb_transfer *transfer_in;
 	struct libusb_transfer *transfer_out;
+	unsigned char *transfer_buf;
 
 	int fd_pipe[2];
 
-	unsigned int xfer_buf_num;
-	unsigned int xfer_buf_len;
-	struct libusb_transfer **xfer;
-	unsigned char **xfer_buf;
 	thermapp_read_async_cb_t cb;
 	void *cb_ctx;
-	unsigned int xfer_errors;
 	enum thermapp_async_status async_status;
 	int async_cancel;
 	int dev_lost;

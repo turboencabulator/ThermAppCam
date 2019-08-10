@@ -40,13 +40,9 @@
 #define FRAME_STOP_HEADER   (0xa5a5a5a5)
 
 //My Banana Pi works fine only at these settings
-#define DEFAULT_BUF_LENGTH (16384)
+#define DEFAULT_BUF_LENGTH (16384) /* len must be multiple of 512 */
 #define DEFAULT_BUF_NUMBER (PACKET_SIZE / (DEFAULT_BUF_LENGTH))
-#define DEFAULT_BUF_REMAIN (DEFAULT_BUF_NUMBER * DEFAULT_BUF_LENGTH)
-
-#if ((DEFAULT_BUF_REMAIN % 512) != 0) /* len must be multiple of 512 */
-#error "DEFAULT_BUF_LENGTH"
-#endif
+#define DEFAULT_BUF_REMAIN (((PACKET_SIZE - (DEFAULT_BUF_LENGTH * DEFAULT_BUF_NUMBER)) + 511) & ~511)
 
 #define BULK_TIMEOUT 0
 

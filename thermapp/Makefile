@@ -1,9 +1,12 @@
 CC = gcc
-CFLAGS = -Wall
-LDFLAGS = $(shell pkg-config --libs --cflags libusb-1.0) -lpthread
+CFLAGS = -Wall $(shell pkg-config --cflags libusb-1.0)
+LDFLAGS = $(shell pkg-config --libs libusb-1.0) -lpthread
 
-thermapp: main.c thermapp.c
+thermapp: main.o thermapp.o
+main.o: main.c thermapp.h
+thermapp.o: thermapp.c thermapp.h
 
 .PHONY: clean
 clean:
-	rm thermapp
+	rm -f thermapp
+	rm -f main.o thermapp.o

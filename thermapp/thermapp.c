@@ -37,7 +37,7 @@ ThermApp *thermapp_initUSB(void)
 	//fprintf(stderr, "malloc thermapp_initUSB\n");
 
 	ThermApp *thermapp = malloc(sizeof *thermapp);
-	if (thermapp == NULL) {
+	if (!thermapp) {
 		fprintf(stderr, "Can't allocate thermapp\n");
 		return NULL;
 	}
@@ -45,14 +45,14 @@ ThermApp *thermapp_initUSB(void)
 	memset(thermapp, 0, sizeof *thermapp);
 
 	thermapp->cfg = malloc(sizeof *thermapp->cfg);
-	if (thermapp->cfg == NULL) {
+	if (!thermapp->cfg) {
 		free(thermapp);
 		fprintf(stderr, "Can't allocate cfg_packet\n");
 		return NULL;
 	}
 
 	thermapp->therm_packet = malloc(sizeof *thermapp->therm_packet);
-	if (thermapp->therm_packet == NULL) {
+	if (!thermapp->therm_packet) {
 		free(thermapp->cfg);
 		free(thermapp);
 		fprintf(stderr, "Can't allocate thermapp_packet\n");
@@ -129,7 +129,7 @@ int thermapp_USB_checkForDevice(ThermApp *thermapp, int vendor, int product)
 	///FIXME: For Debug use libusb_open_device_with_vid_pid
 	/// need to add search device
 	thermapp->dev = libusb_open_device_with_vid_pid(thermapp->ctx, vendor, product);
-	if (thermapp->dev == NULL) {
+	if (!thermapp->dev) {
 		free(thermapp->cfg);
 		free(thermapp);
 		fprintf(stderr, "Open device with vid pid failed\n");
@@ -440,7 +440,7 @@ static int thermapp_alloc_transfer_out(ThermApp *thermapp)
 
 	printf("libusb_alloc_transfer out \n");
 	thermapp->transfer_out = libusb_alloc_transfer(0);
-	if (thermapp->transfer_out == NULL) {
+	if (!thermapp->transfer_out) {
 		fprintf(stderr, "Can't allocate transfer_out\n");
 		return -1;
 	}

@@ -66,7 +66,7 @@ int format_properties(const unsigned int format,
 int main(int argc, char *argv[])
 {
 	ThermApp *therm = thermapp_initUSB();
-	if (therm == NULL) {
+	if (!therm) {
 		fputs("init error\n", stderr);
 		return -1;
 	}

@@ -106,26 +106,13 @@ ThermApp *thermapp_initUSB(void)
 	thermapp->cond_getimage = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
 	thermapp->mutex_thermapp = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 
-	srand(time(NULL));
-
-	//Get random name for fifo pipe
-	sprintf(thermapp->pipe_name, "/tmp/therm_%d", (int)rand());
-	//fprintf(stderr, "mkfifo(thermapp->pipe_name, 0777)\n");
-
 	//Make fifo pipe
-	if (mkfifo(thermapp->pipe_name, 0777) == -1) { // && (errno != EEXIST))
+	if (pipe(thermapp->fd_pipe) == -1) {
 		free(thermapp->cfg);
 		free(thermapp);
-		//FIXME: need to compare thermapp->pipe_name on NULL
-		thermapp->pipe_create = FALSE;
-		perror("mkfifo");
+		perror("pipe");
 		return NULL;
-	} else {
-		thermapp->pipe_create = TRUE;
-		printf("\nfifo pipe %s is created\n", thermapp->pipe_name);
 	}
-	thermapp->fd_pipe_rd = 0;
-	thermapp->fd_pipe_wr = 0;
 	//thermapp->is_NewFrame = FALSE;
 	//thermapp->lost_packet = 0;
 
@@ -216,19 +203,13 @@ void *thermapp_ThreadReadAsync(void *ctx)
 {
 	ThermApp *thermapp = ctx;
 
-	// Open fifo pipe for write
-	if ((thermapp->fd_pipe_wr = open(thermapp->pipe_name, O_WRONLY)) <= 0) {
-		perror("fifo open");
-		return NULL;
-	}
-
 	puts("thermapp_ThreadReadAsync run\n");
-	thermapp_read_async(thermapp, thermapp_PipeWrite, (void *)&thermapp->fd_pipe_wr);
+	thermapp_read_async(thermapp, thermapp_PipeWrite, (void *)&thermapp->fd_pipe[1]);
 
-	puts("close(thermapp->fd_pipe_wr)\n");
+	puts("close(thermapp->fd_pipe[1])\n");
 
-	close(thermapp->fd_pipe_wr);
-	thermapp->fd_pipe_wr = 0;
+	close(thermapp->fd_pipe[1]);
+	thermapp->fd_pipe[1] = 0;
 
 	return NULL;
 }
@@ -239,18 +220,12 @@ void *thermapp_ThreadPipeRead(void *ctx)
 	unsigned int len, FrameHeaderStart = 0, FrameHeaderStop = 0;
 	int actual_length = 0;
 
-	// Open fifo pipe for read
-	if ((thermapp->fd_pipe_rd = open(thermapp->pipe_name, O_RDONLY)) <= 0) {
-		perror("fifo pipe open");
-		return NULL;
-	}
-
 	enum thermapp_async_status current_status = THERMAPP_RUNNING;
 
 	puts("thermapp_ThreadPipeRead run\n");
 	while (current_status == THERMAPP_RUNNING) {
 
-		if ((len = read(thermapp->fd_pipe_rd, &FrameHeaderStart, sizeof(FrameHeaderStart))) <= 0) {
+		if ((len = read(thermapp->fd_pipe[0], &FrameHeaderStart, sizeof(FrameHeaderStart))) <= 0) {
 			fprintf(stderr, "read thermapp_ThreadPipeRead()\n");
 			perror("fifo pipe read");
 			break;
@@ -264,7 +239,7 @@ void *thermapp_ThreadPipeRead(void *ctx)
 			thermapp->is_NewFrame = FALSE;
 			pthread_mutex_lock(&thermapp->mutex_thermapp);
 			for (actual_length = 0; actual_length < (PACKET_SIZE); ) {
-				len = read(thermapp->fd_pipe_rd, (void *)(thermapp->therm_packet) + actual_length, (PACKET_SIZE) - actual_length);
+				len = read(thermapp->fd_pipe[0], (void *)(thermapp->therm_packet) + actual_length, (PACKET_SIZE) - actual_length);
 				if (len <= 0) {
 					fprintf(stderr, "read thermapp_ThreadPipeRead()\n");
 					perror("fifo pipe read");
@@ -277,7 +252,7 @@ void *thermapp_ThreadPipeRead(void *ctx)
 
 			// fprintf(stderr, "len: %d, actual_length: %d\n", len, actual_length);
 			//fprintf(stderr, "FRAME------------->");
-			if (read(thermapp->fd_pipe_rd, &FrameHeaderStop, sizeof(FrameHeaderStop)) <= 0) {
+			if (read(thermapp->fd_pipe[0], &FrameHeaderStop, sizeof(FrameHeaderStop)) <= 0) {
 				fprintf(stderr, "read thermapp_ThreadPipeRead()\n");
 				perror("fifo pipe read");
 				pthread_mutex_unlock(&thermapp->mutex_thermapp);
@@ -301,10 +276,10 @@ void *thermapp_ThreadPipeRead(void *ctx)
 		}
 	}
 
-	fprintf(stderr, "close(thermapp->fd_pipe_rd);\n");
+	fprintf(stderr, "close(thermapp->fd_pipe[0]);\n");
 
-	close(thermapp->fd_pipe_rd);
-	thermapp->fd_pipe_rd = 0;
+	close(thermapp->fd_pipe[0]);
+	thermapp->fd_pipe[0] = 0;
 
 	return NULL;
 }
@@ -507,7 +482,7 @@ void LIBUSB_CALL _libusb_callback(struct libusb_transfer *xfer)
 		//fprintf(stderr, "LIBUSB_TRANSFER_COMPLETED\n");
 		if (thermapp->cb)
 			thermapp->cb(xfer->buffer, xfer->actual_length, thermapp->cb_ctx);
-		//write(thermapp->fd_pipe_wr, xfer->buffer, xfer->actual_length);// Write to fifo pipe
+		//write(thermapp->fd_pipe[1], xfer->buffer, xfer->actual_length);// Write to fifo pipe
 
 		libusb_submit_transfer(xfer); /* resubmit transfer */
 		thermapp->xfer_errors = 0;
@@ -750,18 +725,13 @@ int thermapp_Close(ThermApp *thermapp)
 
 	sleep(1);
 
-	if (thermapp->fd_pipe_rd)
-		close(thermapp->fd_pipe_rd);
-	thermapp->fd_pipe_rd = 0;
+	if (thermapp->fd_pipe[0])
+		close(thermapp->fd_pipe[0]);
+	thermapp->fd_pipe[0] = 0;
 
-	if (thermapp->fd_pipe_wr)
-		close(thermapp->fd_pipe_wr);
-	thermapp->fd_pipe_wr = 0;
-
-	if (thermapp->pipe_create)
-		remove(thermapp->pipe_name);
-
-	thermapp->pipe_name[0] = '\0';
+	if (thermapp->fd_pipe[1])
+		close(thermapp->fd_pipe[1]);
+	thermapp->fd_pipe[1] = 0;
 
 	if (thermapp->cfg)
 		free(thermapp->cfg);

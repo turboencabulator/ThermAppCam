@@ -126,10 +126,7 @@ typedef struct thermapp {
 	struct libusb_transfer *transfer_in;
 	struct libusb_transfer *transfer_out;
 
-	char pipe_name[128];
-	int fd_pipe_wr;
-	int fd_pipe_rd;
-	int pipe_create;
+	int fd_pipe[2];
 
 	unsigned int xfer_buf_num;
 	unsigned int xfer_buf_len;

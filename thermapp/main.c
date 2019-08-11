@@ -14,8 +14,14 @@
 #define VIDEO_DEVICE "/dev/video0"
 #define FRAME_WIDTH  384
 #define FRAME_HEIGHT 288
-//#define FRAME_FORMAT V4L2_PIX_FMT_GREY
+#undef FRAME_RAW
+
+#ifndef FRAME_RAW
 #define FRAME_FORMAT V4L2_PIX_FMT_YUV420
+#else
+#define FRAME_FORMAT V4L2_PIX_FMT_Y16
+#endif
+
 #define ROUND_UP_2(num) (((num)+1)&~1)
 #define ROUND_UP_4(num) (((num)+3)&~3)
 #define ROUND_UP_8(num)  (((num)+7)&~7)
@@ -49,6 +55,11 @@ int format_properties(const unsigned int format,
 		lw = width;
 		fw = width * height;
 		break;
+	case V4L2_PIX_FMT_Y16:
+	case V4L2_PIX_FMT_Y16_BE:
+		lw = 2 * width;
+		fw = 2 * width * height;
+		break;
 	default:
 		return 0;
 	}
@@ -79,7 +90,8 @@ int main(int argc, char *argv[])
 	}
 
 	short frame[PIXELS_DATA_SIZE];
-	uint8_t img[165888];
+
+#ifndef FRAME_RAW
 	int flipv = 0;
 	if (argc >= 2) {
 		flipv = *argv[1];
@@ -123,6 +135,7 @@ int main(int argc, char *argv[])
 	}
 	// end of get cal
 	printf("Calibration finished\n");
+#endif
 
 	struct v4l2_format vid_format;
 
@@ -159,6 +172,9 @@ int main(int argc, char *argv[])
 
 	while (1) {
 		thermapp_GetImage(therm, frame);
+
+#ifndef FRAME_RAW
+		uint8_t img[165888];
 		int i;
 		int frameMax = ((frame[0] + pre_offset_cal - image_cal[0]) * gain_cal) + offset_cal;
 		int frameMin = ((frame[0] + pre_offset_cal - image_cal[0]) * gain_cal) + offset_cal;
@@ -191,6 +207,9 @@ int main(int argc, char *argv[])
 			img[i] = 128;
 		}
 		write(fdwr, img, 165888);
+#else
+		write(fdwr, frame, sizeof frame);
+#endif
 	}
 
 	close(fdwr);

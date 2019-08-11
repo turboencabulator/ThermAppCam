@@ -64,26 +64,38 @@ ThermApp *thermapp_initUSB(void)
 
 	//Initialize data struct
 	// this init data was received from usbmonitor
-	thermapp->cfg->none_volatile_data0 = 0xa5a5a5a5;//it's preamble of cfg_packet
-	thermapp->cfg->none_volatile_data1 = 0xa5d5a5a5;
+	thermapp->cfg->preamble[0] = 0xa5a5;
+	thermapp->cfg->preamble[1] = 0xa5a5;
+	thermapp->cfg->preamble[2] = 0xa5a5;
+	thermapp->cfg->preamble[3] = 0xa5d5;
 	thermapp->cfg->modes = 0x0002; //test pattern low
-	thermapp->cfg->none_volatile_dbyte0 = 0x0000;//
-	thermapp->cfg->none_volatile_data2 = 0x00000000;//
-	thermapp->cfg->none_volatile_data3 = 0x01200000;//
-	thermapp->cfg->none_volatile_data4 = 0x01200180;//
-	thermapp->cfg->none_volatile_data5 = 0x00190180;// high  low
-	thermapp->cfg->none_volatile_data6 = 0x00000000;//
+	thermapp->cfg->data_05 = 0x0000;//
+	thermapp->cfg->data_06 = 0x0000;//
+	thermapp->cfg->data_07 = 0x0000;//
+	thermapp->cfg->data_08 = 0x0000;//
+	thermapp->cfg->data_09 = 0x0120;//
+	thermapp->cfg->data_0a = 0x0180;//
+	thermapp->cfg->data_0b = 0x0120;//
+	thermapp->cfg->data_0c = 0x0180;// low
+	thermapp->cfg->data_0d = 0x0019;// high
+	thermapp->cfg->data_0e = 0x0000;//
+	thermapp->cfg->data_0f = 0x0000;//
 	thermapp->cfg->VoutA = 0x0795;
-	thermapp->cfg->none_volatile_data7 = 0x0000;
+	thermapp->cfg->data_11 = 0x0000;
 	thermapp->cfg->VoutC = 0x058f;
 	thermapp->cfg->VoutD = 0x08a2;
 	thermapp->cfg->VoutE = 0x0b6d;
-	thermapp->cfg->none_volatile_data8 = 0x0b85;//
-	thermapp->cfg->none_volatile_data9 =  0x00000000;//
-	thermapp->cfg->none_volatile_data10 = 0x00400998;//
-	thermapp->cfg->none_volatile_data11 = 0x00000000;//
-	thermapp->cfg->none_volatile_data12 = 0x00000000;//low
-	thermapp->cfg->none_volatile_data13 = 0x0fff0000;//
+	thermapp->cfg->data_15 = 0x0b85;//
+	thermapp->cfg->data_16 = 0x0000;//
+	thermapp->cfg->data_17 = 0x0000;//
+	thermapp->cfg->data_18 = 0x0998;//
+	thermapp->cfg->data_19 = 0x0040;//
+	thermapp->cfg->data_1a = 0x0000;//
+	thermapp->cfg->data_1b = 0x0000;//
+	thermapp->cfg->data_1c = 0x0000;//low
+	thermapp->cfg->data_1d = 0x0000;//
+	thermapp->cfg->data_1e = 0x0000;//
+	thermapp->cfg->data_1f = 0x0fff;//
 
 	thermapp->async_status = THERMAPP_INACTIVE;
 
@@ -284,7 +296,8 @@ void *thermapp_ThreadPipeRead(void *ctx)
 
 int thermapp_ParsingUsbPacket(ThermApp *thermapp, short *ImgData)
 {
-	thermapp->id = thermapp->therm_packet->id;
+	thermapp->id = thermapp->therm_packet->id_lo
+	             | thermapp->therm_packet->id_hi << 16;
 	thermapp->temperature = thermapp->therm_packet->temperature;
 	thermapp->frame_count = thermapp->therm_packet->frame_count;
 
@@ -377,7 +390,7 @@ unsigned short thermapp_getGain(ThermApp *thermapp)
 }
 */
 
-int thermapp_getId(ThermApp *thermapp)
+unsigned int thermapp_getId(ThermApp *thermapp)
 {
 	return thermapp->id;
 }
@@ -408,7 +421,7 @@ void thermapp_setDCoffset(ThermApp *thermapp, unsigned short offset)
 */
 
 /*
-int thermapp_LoadCalibrate(ThermApp *thermapp, int id)
+int thermapp_LoadCalibrate(ThermApp *thermapp, unsigned int id)
 {
 	return 0;
 }

@@ -47,49 +47,73 @@
 #endif
 
 
-#pragma pack(push, 1)
 // AD5628 DAC in Therm App is for generating control voltage
 // VREF = 2.5 volts 11 Bit
 struct cfg_packet {
-	unsigned int none_volatile_data0;
-	unsigned int none_volatile_data1;
+	unsigned short preamble[4];
 	unsigned short modes;// 0xXXXM  Modes set last nibble
-	unsigned short none_volatile_dbyte0;
-	unsigned int none_volatile_data2;
-	unsigned int none_volatile_data3;
-	unsigned int none_volatile_data4;
-	unsigned int none_volatile_data5;
-	unsigned int none_volatile_data6;
+	unsigned short data_05;
+	unsigned short data_06;
+	unsigned short data_07;
+	unsigned short data_08;
+	unsigned short data_09;
+	unsigned short data_0a;
+	unsigned short data_0b;
+	unsigned short data_0c;
+	unsigned short data_0d;
+	unsigned short data_0e;
+	unsigned short data_0f;
 	unsigned short VoutA; //DCoffset;// AD5628 VoutA, Range: 0V - 2.45V, max 2048
-	unsigned short none_volatile_data7;
+	unsigned short data_11;
 	unsigned short VoutC;//gain;// AD5628 VoutC, Range: 0V - 3.59V, max 2984 ??????
-	unsigned short VoutD;//none_volatile_dbyte1;// AD5628 VoutD, Range: 0V - 2.895V, max 2394 ??????
-	unsigned short VoutE;//volatile_data;// AD5628 VoutE, Range: 0V - 3.63V, max 2997, FPA VBUS
-	unsigned short none_volatile_data8;
-	unsigned int none_volatile_data9;
-	unsigned int none_volatile_data10;
-	unsigned int none_volatile_data11;
-	unsigned int none_volatile_data12;
-	unsigned int none_volatile_data13;
+	unsigned short VoutD;// AD5628 VoutD, Range: 0V - 2.895V, max 2394 ??????
+	unsigned short VoutE;// AD5628 VoutE, Range: 0V - 3.63V, max 2997, FPA VBUS
+	unsigned short data_15;
+	unsigned short data_16;
+	unsigned short data_17;
+	unsigned short data_18;
+	unsigned short data_19;
+	unsigned short data_1a;
+	unsigned short data_1b;
+	unsigned short data_1c;
+	unsigned short data_1d;
+	unsigned short data_1e;
+	unsigned short data_1f;
 };
 
-
-typedef struct _thermapp_packet {
-	//int FrameHeaderStart;
-	short some_data0;
-	int id;
-	unsigned char some_data1[16];
+struct thermapp_packet {
+	//unsigned short preamble[4];
+	unsigned short modes;
+	unsigned short id_lo;
+	unsigned short id_hi;
+	unsigned short data_07;
+	unsigned short data_08;
+	unsigned short data_09;
+	unsigned short data_0a;
+	unsigned short data_0b;
+	unsigned short data_0c;
+	unsigned short data_0d;
+	unsigned short data_0e;
 	short temperature;
-	unsigned char some_data2[20];
+	unsigned short VoutA;
+	unsigned short data_11;
+	unsigned short VoutC;
+	unsigned short VoutD;
+	unsigned short VoutE;
+	unsigned short data_15;
+	unsigned short data_16;
+	unsigned short data_17;
+	unsigned short data_18;
+	unsigned short data_19;
 	unsigned short frame_count;
-	unsigned char some_data3[10];
+	unsigned short data_1b;
+	unsigned short data_1c;
+	unsigned short data_1d;
+	unsigned short data_1e;
+	unsigned short data_1f;
 	short pixels_data[PIXELS_DATA_SIZE];
-	unsigned char some_data4[448];
-	//int FrameHeaderStop;
-} thermapp_packet;
-
-#pragma pack(pop)
-
+	unsigned short data_pad[224];
+};
 
 enum thermapp_async_status {
 	THERMAPP_INACTIVE = 0,
@@ -108,7 +132,7 @@ typedef struct thermapp {
 	pthread_cond_t  cond_pipe,
 	                cond_getimage;
 
-	int id;
+	unsigned int id;
 	short temperature;
 	unsigned short frame_count;
 
@@ -127,7 +151,7 @@ typedef struct thermapp {
 	int dev_lost;
 
 	struct cfg_packet *cfg;
-	thermapp_packet *therm_packet;
+	struct thermapp_packet *therm_packet;
 	int lost_packet;
 	int is_NewFrame;
 	//short **calibrate_pixels;
@@ -140,7 +164,7 @@ int thermapp_USB_checkForDevice(ThermApp *thermapp, int vendor, int product);
 
 int thermapp_SendConfigurationHeader(ThermApp *thermapp, unsigned char *data, int lengh);
 
-thermapp_packet *thermapp_FrameCapture(ThermApp *thermapp);
+struct thermapp_packet *thermapp_FrameCapture(ThermApp *thermapp);
 
 int thermapp_FrameRequest_thread(ThermApp *thermapp);
 
@@ -152,7 +176,7 @@ int thermapp_ParsingUsbPacket(ThermApp *thermapp, short *ImgData);
 
 //unsigned short thermapp_getGain(ThermApp *thermapp);
 
-int thermapp_getId(ThermApp *thermapp);
+unsigned int thermapp_getId(ThermApp *thermapp);
 
 float thermapp_getTemperature(ThermApp *thermapp);
 

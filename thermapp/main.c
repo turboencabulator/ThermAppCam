@@ -78,10 +78,55 @@ int main(int argc, char *argv[])
 		thermapp_FrameRequest_thread(therm);
 	}
 
+	short frame[PIXELS_DATA_SIZE];
+	uint8_t img[165888];
+	int flipv = 0;
+	if (argc >= 2) {
+		flipv = *argv[1];
+	}
+
+	// get cal
+	printf("Calibrating... cover the lens!\n");
+	double pre_offset_cal = 0;
+	double gain_cal = 1;
+	double offset_cal = 0;
+	long meancal = 0;
+	int image_cal[PIXELS_DATA_SIZE];
+	int deadpixel_map[PIXELS_DATA_SIZE] = { 0 };
+	thermapp_GetImage(therm, frame);
+	thermapp_GetImage(therm, frame);
+
+	for (int i = 0; i < PIXELS_DATA_SIZE; i++) {
+		image_cal[i] = frame[i];
+	}
+
+	for (int i = 0; i < 50; i++) {
+		printf("Captured calibration frame %d/50. Keep lens covered.\n", i+1);
+		thermapp_GetImage(therm, frame);
+
+		for (int j = 0; j < PIXELS_DATA_SIZE; j++) {
+			image_cal[j] += frame[j];
+		}
+	}
+
+	for (int i = 0; i < PIXELS_DATA_SIZE; i++) {
+		image_cal[i] /= 50;
+		meancal += image_cal[i];
+	}
+	meancal /= PIXELS_DATA_SIZE;
+	// record the dead pixels
+	for (int i = 0; i < PIXELS_DATA_SIZE; i++) {
+		if ((image_cal[i] > meancal + 250) || (image_cal[i] < meancal - 250)) {
+			printf("Dead pixel ID: %d (%d vs %li)\n", i, image_cal[i], meancal);
+			deadpixel_map[i] = 1;
+		}
+	}
+	// end of get cal
+	printf("Calibration finished\n");
+
 	struct v4l2_format vid_format;
 
-	const char *video_device = VIDEO_DEVICE;
-	int fdwr = open(video_device, O_RDWR);
+	int fdwr = open(VIDEO_DEVICE, O_WRONLY);
 	assert(fdwr >= 0);
 
 	memset(&vid_format, 0, sizeof vid_format);
@@ -112,51 +157,6 @@ int main(int argc, char *argv[])
 	if (ret_code < 0)
 		perror("VIDIOC_S_FMT");
 
-	short frame[PIXELS_DATA_SIZE];
-	uint8_t img[165888];
-	double pre_offset_cal = 0;
-	double gain_cal = 1;
-	double offset_cal = 0;
-	int flipv = 0;
-	if (argc >= 2) {
-		flipv = *argv[1];
-	}
-	// get cal
-	printf("Calibrating... cover the lens!\n");
-	long meancal = 0;
-	int image_cal[PIXELS_DATA_SIZE];
-	int deadpixel_map[PIXELS_DATA_SIZE] = { 0 };
-	thermapp_GetImage(therm, frame);
-	thermapp_GetImage(therm, frame);
-
-	for (int i = 0; i < PIXELS_DATA_SIZE; i++) {
-		image_cal[i] = frame[i];
-	}
-
-	for (int i = 0; i < 50; i++) {
-		printf("Captured calibration frame %d/50. Keep lens covered.\n", i+1);
-		thermapp_GetImage(therm, frame);
-
-		for (int j = 0; j < PIXELS_DATA_SIZE; j++) {
-			image_cal[j] += frame[j];
-		}
-	}
-
-	for (int i = 0; i < PIXELS_DATA_SIZE; i++) {
-		image_cal[i] /= 50;
-		meancal += image_cal[i];
-	}
-	meancal = meancal / PIXELS_DATA_SIZE;
-	// record the dead pixels
-	for (int i = 0; i < PIXELS_DATA_SIZE; i++) {
-		if ((image_cal[i] > meancal + 250) || (image_cal[i] < meancal - 250)) {
-			printf("Dead pixel ID: %d (%d vs %li)\n", i, image_cal[i], meancal);
-			deadpixel_map[i] = 1;
-		}
-	}
-
-	// end of get cal
-	printf("Calibration finished\n");
 	while (1) {
 		thermapp_GetImage(therm, frame);
 		int i;

@@ -471,7 +471,7 @@ int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *c
 
 	thermapp->transfer_out = libusb_alloc_transfer(0);
 	thermapp->transfer_in = libusb_alloc_transfer(0);
-	thermapp->transfer_buf = malloc((sizeof *thermapp->therm_packet + 511) & ~511);
+	thermapp->transfer_buf = malloc(512);
 
 	libusb_fill_bulk_transfer(thermapp->transfer_out,
 	                          thermapp->dev,
@@ -487,7 +487,7 @@ int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *c
 	                          thermapp->dev,
 	                          LIBUSB_ENDPOINT_IN | 1,
 	                          thermapp->transfer_buf,
-	                          (sizeof *thermapp->therm_packet + 511) & ~511,
+	                          512,
 	                          _libusb_callback,
 	                          (void *)thermapp,
 	                          BULK_TIMEOUT);

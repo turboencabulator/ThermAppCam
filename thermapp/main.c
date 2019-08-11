@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <assert.h>
 
 #define VIDEO_DEVICE "/dev/video0"
@@ -31,10 +32,6 @@ int format_properties(const unsigned int format,
 	unsigned int lw, fw;
 	switch (format) {
 	case V4L2_PIX_FMT_YUV420:
-		lw = width; /* ??? */
-		fw = ROUND_UP_4(width) * ROUND_UP_2(height);
-		fw += 2 * ((ROUND_UP_8(width) / 2) * (ROUND_UP_2(height) / 2));
-		break;
 	case V4L2_PIX_FMT_YVU420:
 		lw = width; /* ??? */
 		fw = ROUND_UP_4(width) * ROUND_UP_2(height);
@@ -55,8 +52,8 @@ int format_properties(const unsigned int format,
 	default:
 		return 0;
 	}
-	fprintf(stdout,"framewidth %d\n", fw);
-	fprintf(stdout,"linewidth %d\n", lw);
+	fprintf(stdout, "framewidth %d\n", fw);
+	fprintf(stdout, "linewidth %d\n", lw);
 	if (linewidth) *linewidth = lw;
 	if (framewidth) *framewidth = fw;
 
@@ -81,20 +78,19 @@ int main(int argc, char *argv[])
 		thermapp_FrameRequest_thread(therm);
 	}
 
-	struct v4l2_capability vid_caps;
 	struct v4l2_format vid_format;
 
 	const char *video_device = VIDEO_DEVICE;
 	int fdwr = open(video_device, O_RDWR);
 	assert(fdwr >= 0);
 
-	int ret_code = ioctl(fdwr, VIDIOC_QUERYCAP, &vid_caps);
-	assert(ret_code != -1);
-
 	memset(&vid_format, 0, sizeof vid_format);
-	ret_code = ioctl(fdwr, VIDIOC_G_FMT, &vid_format);
-
 	vid_format.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+
+	int ret_code = ioctl(fdwr, VIDIOC_G_FMT, &vid_format);
+	if (ret_code < 0)
+		perror("VIDIOC_G_FMT");
+
 	vid_format.fmt.pix.width = FRAME_WIDTH;
 	vid_format.fmt.pix.height = FRAME_HEIGHT;
 	vid_format.fmt.pix.pixelformat = FRAME_FORMAT;
@@ -113,8 +109,8 @@ int main(int argc, char *argv[])
 	vid_format.fmt.pix.bytesperline = linewidth;
 
 	ret_code = ioctl(fdwr, VIDIOC_S_FMT, &vid_format);
-
-	//assert(ret_code != -1);
+	if (ret_code < 0)
+		perror("VIDIOC_S_FMT");
 
 	short frame[PIXELS_DATA_SIZE];
 	uint8_t img[165888];
@@ -128,28 +124,26 @@ int main(int argc, char *argv[])
 	// get cal
 	printf("Calibrating... cover the lens!\n");
 	long meancal = 0;
-	short frame1[PIXELS_DATA_SIZE];
-	int d_frame1[PIXELS_DATA_SIZE];
 	int image_cal[PIXELS_DATA_SIZE];
 	int deadpixel_map[PIXELS_DATA_SIZE] = { 0 };
-	thermapp_GetImage(therm, frame1);
-	thermapp_GetImage(therm, frame1);
+	thermapp_GetImage(therm, frame);
+	thermapp_GetImage(therm, frame);
 
 	for (int i = 0; i < PIXELS_DATA_SIZE; i++) {
-		d_frame1[i] = frame1[i];
+		image_cal[i] = frame[i];
 	}
 
 	for (int i = 0; i < 50; i++) {
 		printf("Captured calibration frame %d/50. Keep lens covered.\n", i+1);
-		thermapp_GetImage(therm, frame1);
+		thermapp_GetImage(therm, frame);
 
 		for (int j = 0; j < PIXELS_DATA_SIZE; j++) {
-			d_frame1[j] += frame1[j];
+			image_cal[j] += frame[j];
 		}
 	}
 
 	for (int i = 0; i < PIXELS_DATA_SIZE; i++) {
-		image_cal[i] = d_frame1[i] / 50;
+		image_cal[i] /= 50;
 		meancal += image_cal[i];
 	}
 	meancal = meancal / PIXELS_DATA_SIZE;
@@ -193,7 +187,7 @@ int main(int argc, char *argv[])
 				img[PIXELS_DATA_SIZE - 1 - (PIXELS_DATA_SIZE - ((i/384)+1)*384 + i%384)] = x;
 			}
 		}
-		for (i = PIXELS_DATA_SIZE; i < 165888; i++) {
+		for (; i < 165888; i++) {
 			img[i] = 128;
 		}
 		write(fdwr, img, 165888);

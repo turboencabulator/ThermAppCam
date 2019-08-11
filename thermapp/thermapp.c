@@ -54,14 +54,6 @@ ThermApp *thermapp_initUSB(void)
 		return NULL;
 	}
 
-	if (sizeof *thermapp->therm_packet != PACKET_SIZE) {
-		free(thermapp->therm_packet);
-		free(thermapp->cfg);
-		free(thermapp);
-		fprintf(stderr, "thermapp_packet not equal PACKET_SIZE\n");
-		return NULL;
-	}
-
 	//Initialize data struct
 	// this init data was received from usbmonitor
 	thermapp->cfg->preamble[0] = 0xa5a5;
@@ -69,8 +61,8 @@ ThermApp *thermapp_initUSB(void)
 	thermapp->cfg->preamble[2] = 0xa5a5;
 	thermapp->cfg->preamble[3] = 0xa5d5;
 	thermapp->cfg->modes = 0x0002; //test pattern low
-	thermapp->cfg->data_05 = 0x0000;//
-	thermapp->cfg->data_06 = 0x0000;//
+	thermapp->cfg->id_lo = 0;//
+	thermapp->cfg->id_hi = 0;//
 	thermapp->cfg->data_07 = 0x0000;//
 	thermapp->cfg->data_08 = 0x0000;//
 	thermapp->cfg->data_09 = 0x0120;//
@@ -79,7 +71,7 @@ ThermApp *thermapp_initUSB(void)
 	thermapp->cfg->data_0c = 0x0180;// low
 	thermapp->cfg->data_0d = 0x0019;// high
 	thermapp->cfg->data_0e = 0x0000;//
-	thermapp->cfg->data_0f = 0x0000;//
+	thermapp->cfg->temperature = 0;//
 	thermapp->cfg->VoutA = 0x0795;
 	thermapp->cfg->data_11 = 0x0000;
 	thermapp->cfg->VoutC = 0x058f;
@@ -90,7 +82,7 @@ ThermApp *thermapp_initUSB(void)
 	thermapp->cfg->data_17 = 0x0000;//
 	thermapp->cfg->data_18 = 0x0998;//
 	thermapp->cfg->data_19 = 0x0040;//
-	thermapp->cfg->data_1a = 0x0000;//
+	thermapp->cfg->frame_count = 0;//
 	thermapp->cfg->data_1b = 0x0000;//
 	thermapp->cfg->data_1c = 0x0000;//low
 	thermapp->cfg->data_1d = 0x0000;//
@@ -227,52 +219,47 @@ void *thermapp_ThreadReadAsync(void *ctx)
 void *thermapp_ThreadPipeRead(void *ctx)
 {
 	ThermApp *thermapp = (ThermApp *)ctx;
-	unsigned int len, FrameHeaderStart = 0, FrameHeaderStop = 0;
-	int actual_length = 0;
+	struct cfg_packet header;
+	size_t len;
+	ssize_t ret;
 
 	enum thermapp_async_status current_status = THERMAPP_RUNNING;
 
 	puts("thermapp_ThreadPipeRead run\n");
 	while (current_status == THERMAPP_RUNNING) {
 
-		if ((len = read(thermapp->fd_pipe[0], &FrameHeaderStart, sizeof FrameHeaderStart)) <= 0) {
-			fprintf(stderr, "read thermapp_ThreadPipeRead()\n");
-			perror("fifo pipe read");
-			break;
+		for (len = 0; len < sizeof header; ) {
+			if ((ret = read(thermapp->fd_pipe[0], (char *)&header + len, sizeof header - len)) <= 0) {
+				fprintf(stderr, "read thermapp_ThreadPipeRead()\n");
+				perror("fifo pipe read");
+				break;
+			}
+			len += ret;
+			//fprintf(stderr, "ret: %d, len: %d\n", ret, len);
 		}
 
 		//fprintf(stderr, "thermapp_ThreadPipeRead(): thermapp->async_status =  %d\n", thermapp->async_status);
 
-		//Catch Start preamble FRAME_START_HEADER
-		if (FrameHeaderStart == FRAME_START_HEADER) {
-			//fprintf(stderr, "FrameHeaderStart == FRAME_START_HEADER\n");
+		// FIXME:  Assumes frame start is always 64-byte aligned.
+		if (memcmp(&header, thermapp->cfg, sizeof header.preamble) == 0) {
+			//fprintf(stderr, "FRAME_START\n");
 			thermapp->is_NewFrame = FALSE;
 			pthread_mutex_lock(&thermapp->mutex_thermapp);
-			for (actual_length = 0; actual_length < (PACKET_SIZE); ) {
-				len = read(thermapp->fd_pipe[0], (char *)(thermapp->therm_packet) + actual_length, (PACKET_SIZE) - actual_length);
-				if (len <= 0) {
+			thermapp->therm_packet->header = header;
+			for (len = sizeof header; len < sizeof *thermapp->therm_packet; ) {
+				ret = read(thermapp->fd_pipe[0], (char *)thermapp->therm_packet + len, sizeof *thermapp->therm_packet - len);
+				if (ret <= 0) {
 					fprintf(stderr, "read thermapp_ThreadPipeRead()\n");
 					perror("fifo pipe read");
 					pthread_mutex_unlock(&thermapp->mutex_thermapp);
 					break;
 				}
-				actual_length += len;
-				//fprintf(stderr, "len: %d, actual_length: %d\n", len, actual_length);
+				len += ret;
+				//fprintf(stderr, "ret: %d, len: %d\n", ret, len);
 			}
 
-			// fprintf(stderr, "len: %d, actual_length: %d\n", len, actual_length);
-			//fprintf(stderr, "FRAME------------->");
-			if (read(thermapp->fd_pipe[0], &FrameHeaderStop, sizeof FrameHeaderStop) <= 0) {
-				fprintf(stderr, "read thermapp_ThreadPipeRead()\n");
-				perror("fifo pipe read");
-				pthread_mutex_unlock(&thermapp->mutex_thermapp);
-				break;
-			}
-
-			//Catch Stop preamble FRAME_STOP_HEADER
-			// On FRAME_STOP_HEADER we can check the damaged packet
-			if (FrameHeaderStop == FRAME_STOP_HEADER) {
-				// fprintf(stderr, "FRAME_OK\n");
+			if (1) { // FIXME:  Find a way to check the size.
+				//fprintf(stderr, "FRAME_OK\n");
 				thermapp->is_NewFrame = TRUE;
 				//pthread_cond_signal(&thermapp->cond_getimage);
 				pthread_cond_wait(&thermapp->cond_pipe, &thermapp->mutex_thermapp);
@@ -296,10 +283,10 @@ void *thermapp_ThreadPipeRead(void *ctx)
 
 int thermapp_ParsingUsbPacket(ThermApp *thermapp, short *ImgData)
 {
-	thermapp->id = thermapp->therm_packet->id_lo
-	             | thermapp->therm_packet->id_hi << 16;
-	thermapp->temperature = thermapp->therm_packet->temperature;
-	thermapp->frame_count = thermapp->therm_packet->frame_count;
+	thermapp->id = thermapp->therm_packet->header.id_lo
+	             | thermapp->therm_packet->header.id_hi << 16;
+	thermapp->temperature = thermapp->therm_packet->header.temperature;
+	thermapp->frame_count = thermapp->therm_packet->header.frame_count;
 
 #if 0
 	int i;
@@ -494,7 +481,7 @@ int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *c
 
 	thermapp->transfer_out = libusb_alloc_transfer(0);
 	thermapp->transfer_in = libusb_alloc_transfer(0);
-	thermapp->transfer_buf = malloc((PACKET_SIZE + 511) & ~511);
+	thermapp->transfer_buf = malloc((sizeof *thermapp->therm_packet + 511) & ~511);
 
 	libusb_fill_bulk_transfer(thermapp->transfer_out,
 	                          thermapp->dev,
@@ -510,7 +497,7 @@ int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *c
 	                          thermapp->dev,
 	                          LIBUSB_ENDPOINT_IN | 1,
 	                          thermapp->transfer_buf,
-	                          (PACKET_SIZE + 511) & ~511,
+	                          (sizeof *thermapp->therm_packet + 511) & ~511,
 	                          _libusb_callback,
 	                          (void *)thermapp,
 	                          BULK_TIMEOUT);

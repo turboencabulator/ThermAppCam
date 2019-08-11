@@ -34,10 +34,7 @@
 #define VENDOR  (0x1772)
 #define PRODUCT (0x0002)
 
-#define PACKET_SIZE         (221688)
 #define PIXELS_DATA_SIZE    (384*288)
-#define FRAME_START_HEADER  (0xa5d5a5a5)
-#define FRAME_STOP_HEADER   (0xa5a5a5a5)
 
 #define BULK_TIMEOUT 0
 
@@ -52,38 +49,6 @@
 struct cfg_packet {
 	unsigned short preamble[4];
 	unsigned short modes;// 0xXXXM  Modes set last nibble
-	unsigned short data_05;
-	unsigned short data_06;
-	unsigned short data_07;
-	unsigned short data_08;
-	unsigned short data_09;
-	unsigned short data_0a;
-	unsigned short data_0b;
-	unsigned short data_0c;
-	unsigned short data_0d;
-	unsigned short data_0e;
-	unsigned short data_0f;
-	unsigned short VoutA; //DCoffset;// AD5628 VoutA, Range: 0V - 2.45V, max 2048
-	unsigned short data_11;
-	unsigned short VoutC;//gain;// AD5628 VoutC, Range: 0V - 3.59V, max 2984 ??????
-	unsigned short VoutD;// AD5628 VoutD, Range: 0V - 2.895V, max 2394 ??????
-	unsigned short VoutE;// AD5628 VoutE, Range: 0V - 3.63V, max 2997, FPA VBUS
-	unsigned short data_15;
-	unsigned short data_16;
-	unsigned short data_17;
-	unsigned short data_18;
-	unsigned short data_19;
-	unsigned short data_1a;
-	unsigned short data_1b;
-	unsigned short data_1c;
-	unsigned short data_1d;
-	unsigned short data_1e;
-	unsigned short data_1f;
-};
-
-struct thermapp_packet {
-	//unsigned short preamble[4];
-	unsigned short modes;
 	unsigned short id_lo;
 	unsigned short id_hi;
 	unsigned short data_07;
@@ -95,11 +60,11 @@ struct thermapp_packet {
 	unsigned short data_0d;
 	unsigned short data_0e;
 	short temperature;
-	unsigned short VoutA;
+	unsigned short VoutA; //DCoffset;// AD5628 VoutA, Range: 0V - 2.45V, max 2048
 	unsigned short data_11;
-	unsigned short VoutC;
-	unsigned short VoutD;
-	unsigned short VoutE;
+	unsigned short VoutC;//gain;// AD5628 VoutC, Range: 0V - 3.59V, max 2984 ??????
+	unsigned short VoutD;// AD5628 VoutD, Range: 0V - 2.895V, max 2394 ??????
+	unsigned short VoutE;// AD5628 VoutE, Range: 0V - 3.63V, max 2997, FPA VBUS
 	unsigned short data_15;
 	unsigned short data_16;
 	unsigned short data_17;
@@ -111,6 +76,10 @@ struct thermapp_packet {
 	unsigned short data_1d;
 	unsigned short data_1e;
 	unsigned short data_1f;
+};
+
+struct thermapp_packet {
+	struct cfg_packet header;
 	short pixels_data[PIXELS_DATA_SIZE];
 	unsigned short data_pad[224];
 };

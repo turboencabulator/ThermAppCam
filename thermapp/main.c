@@ -25,8 +25,8 @@
 int format_properties(const unsigned int format,
                       const unsigned int width,
                       const unsigned int height,
-                      size_t*linewidth,
-                      size_t*framewidth)
+                      size_t *linewidth,
+                      size_t *framewidth)
 {
 	unsigned int lw, fw;
 	switch (format) {
@@ -92,30 +92,29 @@ int main(int argc, char *argv[])
 	assert(ret_code != -1);
 
 	memset(&vid_format, 0, sizeof vid_format);
-
 	ret_code = ioctl(fdwr, VIDIOC_G_FMT, &vid_format);
 
-	size_t framesize;
-	size_t linewidth;
 	vid_format.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 	vid_format.fmt.pix.width = FRAME_WIDTH;
 	vid_format.fmt.pix.height = FRAME_HEIGHT;
 	vid_format.fmt.pix.pixelformat = FRAME_FORMAT;
-	vid_format.fmt.pix.sizeimage = framesize;
 	vid_format.fmt.pix.field = V4L2_FIELD_NONE;
-	vid_format.fmt.pix.bytesperline = linewidth;
 	vid_format.fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
 
-	ret_code = ioctl(fdwr, VIDIOC_S_FMT, &vid_format);
-
-	//assert(ret_code != -1);
-
+	size_t framesize;
+	size_t linewidth;
 	if (!format_properties(vid_format.fmt.pix.pixelformat,
 	                       vid_format.fmt.pix.width, vid_format.fmt.pix.height,
 	                       &linewidth,
 	                       &framesize)) {
 		printf("unable to guess correct settings for format '%d'\n", FRAME_FORMAT);
 	}
+	vid_format.fmt.pix.sizeimage = framesize;
+	vid_format.fmt.pix.bytesperline = linewidth;
+
+	ret_code = ioctl(fdwr, VIDIOC_S_FMT, &vid_format);
+
+	//assert(ret_code != -1);
 
 	short frame[PIXELS_DATA_SIZE];
 	uint8_t img[165888];

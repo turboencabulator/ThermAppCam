@@ -103,7 +103,6 @@ ThermApp *thermapp_initUSB(void)
 	//fprintf(stderr, "PTHREAD INITIALIZER\n");
 
 	//init thread condition
-	thermapp->cond_pipe = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
 	thermapp->cond_getimage = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
 	thermapp->mutex_thermapp = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 
@@ -115,7 +114,6 @@ ThermApp *thermapp_initUSB(void)
 		perror("pipe");
 		return NULL;
 	}
-	//thermapp->is_NewFrame = FALSE;
 	//thermapp->lost_packet = 0;
 
 	return thermapp;
@@ -243,7 +241,6 @@ void *thermapp_ThreadPipeRead(void *ctx)
 		// FIXME:  Assumes frame start is always 64-byte aligned.
 		if (memcmp(&header, thermapp->cfg, sizeof header.preamble) == 0) {
 			//fprintf(stderr, "FRAME_START\n");
-			thermapp->is_NewFrame = FALSE;
 			pthread_mutex_lock(&thermapp->mutex_thermapp);
 			thermapp->therm_packet->header = header;
 			for (len = sizeof header; len < sizeof *thermapp->therm_packet; ) {
@@ -260,9 +257,7 @@ void *thermapp_ThreadPipeRead(void *ctx)
 
 			if (1) { // FIXME:  Find a way to check the size.
 				//fprintf(stderr, "FRAME_OK\n");
-				thermapp->is_NewFrame = TRUE;
-				//pthread_cond_signal(&thermapp->cond_getimage);
-				pthread_cond_wait(&thermapp->cond_pipe, &thermapp->mutex_thermapp);
+				pthread_cond_broadcast(&thermapp->cond_getimage);
 			} else {
 				fprintf(stderr, "lost frame\n");
 				thermapp->lost_packet++; //increment damaged frames counter
@@ -328,19 +323,14 @@ int thermapp_ParsingUsbPacket(ThermApp *thermapp, short *ImgData)
 }
 
 // This function for getting frame pixel data
-int thermapp_GetImage(ThermApp *thermapp, short *ImgData)
+void thermapp_GetImage(ThermApp *thermapp, short *ImgData)
 {
-	if (!thermapp->is_NewFrame) return 0;
-
 	pthread_mutex_lock(&thermapp->mutex_thermapp);
+	pthread_cond_wait(&thermapp->cond_getimage, &thermapp->mutex_thermapp);
 
 	thermapp_ParsingUsbPacket(thermapp, ImgData);
-	thermapp->is_NewFrame = FALSE;
-	pthread_cond_signal(&thermapp->cond_pipe);
 
 	pthread_mutex_unlock(&thermapp->mutex_thermapp);
-
-	return 1;
 }
 
 

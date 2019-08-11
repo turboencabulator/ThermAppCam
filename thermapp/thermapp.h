@@ -98,8 +98,7 @@ typedef struct thermapp {
 
 	pthread_mutex_t mutex_thermapp;
 
-	pthread_cond_t  cond_pipe,
-	                cond_getimage;
+	pthread_cond_t cond_getimage;
 
 	unsigned int id;
 	short temperature;
@@ -122,7 +121,6 @@ typedef struct thermapp {
 	struct cfg_packet *cfg;
 	struct thermapp_packet *therm_packet;
 	int lost_packet;
-	int is_NewFrame;
 	//short **calibrate_pixels;
 } ThermApp;
 
@@ -137,7 +135,7 @@ struct thermapp_packet *thermapp_FrameCapture(ThermApp *thermapp);
 
 int thermapp_FrameRequest_thread(ThermApp *thermapp);
 
-int thermapp_GetImage(ThermApp *thermapp, short *ImgData);
+void thermapp_GetImage(ThermApp *thermapp, short *ImgData);
 
 int thermapp_ParsingUsbPacket(ThermApp *thermapp, short *ImgData);
 

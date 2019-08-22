@@ -121,9 +121,6 @@ ThermApp *thermapp_initUSB(void)
 
 int thermapp_USB_checkForDevice(ThermApp *thermapp, int vendor, int product)
 {
-	int status;
-	unsigned char buffer[255];
-
 	//puts("libusb_open_device_with_vid_pid\n");
 
 	///FIXME: For Debug use libusb_open_device_with_vid_pid
@@ -145,39 +142,6 @@ int thermapp_USB_checkForDevice(ThermApp *thermapp, int vendor, int product)
 		fprintf(stderr, "claim interface failed\n");
 		return 0;
 	}
-
-
-	// We don't know what is this but this is needed to make ThermApp work. We received it from usbmonitor
-	status = libusb_control_transfer(thermapp->dev, LIBUSB_ENDPOINT_IN, 0x06, 0x0100, 0x0000, buffer, 0x12, 0);
-	fprintf(stdout, "status: %d, ", status);
-
-	status = libusb_control_transfer(thermapp->dev, LIBUSB_ENDPOINT_IN, 0x06, 0x0200, 0x0000, buffer, 0x09, 0);
-	fprintf(stdout, "status: %d, ", status);
-
-	status = libusb_control_transfer(thermapp->dev, LIBUSB_ENDPOINT_IN, 0x06, 0x0200, 0x0000, buffer, 0x20, 0);
-	fprintf(stdout, "status: %d, ", status);
-
-	status = libusb_control_transfer(thermapp->dev, LIBUSB_ENDPOINT_IN, 0x06, 0x0300, 0x0000, buffer, 0xff, 0);
-	fprintf(stdout, "status: %d, ", status);
-
-	status = libusb_control_transfer(thermapp->dev, LIBUSB_ENDPOINT_IN, 0x06, 0x0302, 0x0409, buffer, 0xff, 0);
-	fprintf(stdout, "status: %d, ", status);
-
-	status = libusb_control_transfer(thermapp->dev, LIBUSB_ENDPOINT_IN, 0x06, 0x0301, 0x0409, buffer, 0xff, 0);
-	fprintf(stdout, "status: %d, ", status);
-
-	status = libusb_control_transfer(thermapp->dev, LIBUSB_ENDPOINT_IN, 0x06, 0x0303, 0x0409, buffer, 0xff, 0);
-	fprintf(stdout, "status: %d, ", status);
-
-	status = libusb_control_transfer(thermapp->dev, LIBUSB_TRANSFER_TYPE_CONTROL, 0x09, 0x0001, 0x0000, buffer, 0x00, 0);
-	fprintf(stdout, "status: %d, ", status);
-
-	status = libusb_control_transfer(thermapp->dev, LIBUSB_ENDPOINT_IN, 0x06, 0x0304, 0x0409, buffer, 0xff, 0);
-	fprintf(stdout, "status: %d, ", status);
-	//print_status(buffer, 0xff);
-
-	status = libusb_control_transfer(thermapp->dev, LIBUSB_ENDPOINT_IN, 0x06, 0x0305, 0x0409, buffer, 0xff, 0);
-	fprintf(stdout, "status: %d, \n", status);
 
 	return 0;
 }

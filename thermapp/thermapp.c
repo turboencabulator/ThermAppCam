@@ -61,10 +61,10 @@ ThermApp *thermapp_initUSB(void)
 	thermapp->cfg->preamble[2] = 0xa5a5;
 	thermapp->cfg->preamble[3] = 0xa5d5;
 	thermapp->cfg->modes = 0x0002; //test pattern low
-	thermapp->cfg->id_lo = 0;//
-	thermapp->cfg->id_hi = 0;//
-	thermapp->cfg->data_07 = 0x0000;//
-	thermapp->cfg->data_08 = 0x0000;//
+	thermapp->cfg->serial_num_lo = 0;
+	thermapp->cfg->serial_num_hi = 0;
+	thermapp->cfg->hardware_ver = 0;
+	thermapp->cfg->firmware_ver = 0;
 	thermapp->cfg->data_09 = 0x0120;//
 	thermapp->cfg->data_0a = 0x0180;//
 	thermapp->cfg->data_0b = 0x0120;//
@@ -278,8 +278,10 @@ void *thermapp_ThreadPipeRead(void *ctx)
 
 int thermapp_ParsingUsbPacket(ThermApp *thermapp, short *ImgData)
 {
-	thermapp->id = thermapp->therm_packet->header.id_lo
-	             | thermapp->therm_packet->header.id_hi << 16;
+	thermapp->serial_num = thermapp->therm_packet->header.serial_num_lo
+	                     | thermapp->therm_packet->header.serial_num_hi << 16;
+	thermapp->hardware_ver = thermapp->therm_packet->header.hardware_ver;
+	thermapp->firmware_ver = thermapp->therm_packet->header.firmware_ver;
 	thermapp->temperature = thermapp->therm_packet->header.temperature;
 	thermapp->frame_count = thermapp->therm_packet->header.frame_count;
 
@@ -369,7 +371,7 @@ unsigned short thermapp_getGain(ThermApp *thermapp)
 
 unsigned int thermapp_getId(ThermApp *thermapp)
 {
-	return thermapp->id;
+	return thermapp->serial_num;
 }
 
 //We don't know offset and quant value for temperature.

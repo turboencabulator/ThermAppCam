@@ -49,10 +49,10 @@
 struct cfg_packet {
 	unsigned short preamble[4];
 	unsigned short modes;// 0xXXXM  Modes set last nibble
-	unsigned short id_lo;
-	unsigned short id_hi;
-	unsigned short data_07;
-	unsigned short data_08;
+	unsigned short serial_num_lo;
+	unsigned short serial_num_hi;
+	unsigned short hardware_ver;
+	unsigned short firmware_ver;
 	unsigned short data_09;
 	unsigned short data_0a;
 	unsigned short data_0b;
@@ -100,7 +100,9 @@ typedef struct thermapp {
 
 	pthread_cond_t cond_getimage;
 
-	unsigned int id;
+	unsigned int serial_num;
+	unsigned short hardware_ver;
+	unsigned short firmware_ver;
 	short temperature;
 	unsigned short frame_count;
 

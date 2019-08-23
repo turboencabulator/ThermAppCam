@@ -133,6 +133,13 @@ int thermapp_USB_checkForDevice(ThermApp *thermapp, int vendor, int product)
 		return -1;
 	}
 
+	if (libusb_set_configuration(thermapp->dev, 1)) {
+		free(thermapp->cfg);
+		free(thermapp);
+		fprintf(stderr, "set configuration failed\n");
+		return -1;
+	}
+
 	//if (libusb_kernel_driver_active(thermapp->dev, 0))
 	//	libusb_detach_kernel_driver(thermapp->dev, 0);
 
@@ -140,7 +147,7 @@ int thermapp_USB_checkForDevice(ThermApp *thermapp, int vendor, int product)
 		free(thermapp->cfg);
 		free(thermapp);
 		fprintf(stderr, "claim interface failed\n");
-		return 0;
+		return -1;
 	}
 
 	return 0;

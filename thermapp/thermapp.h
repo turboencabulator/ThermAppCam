@@ -20,6 +20,7 @@
 #define THERMAPP_H_
 
 #include <pthread.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #include <libusb.h>
@@ -47,41 +48,41 @@
 // AD5628 DAC in Therm App is for generating control voltage
 // VREF = 2.5 volts 11 Bit
 struct cfg_packet {
-	unsigned short preamble[4];
-	unsigned short modes;// 0xXXXM  Modes set last nibble
-	unsigned short serial_num_lo;
-	unsigned short serial_num_hi;
-	unsigned short hardware_ver;
-	unsigned short firmware_ver;
-	unsigned short data_09;
-	unsigned short data_0a;
-	unsigned short data_0b;
-	unsigned short data_0c;
-	unsigned short data_0d;
-	unsigned short data_0e;
-	short temperature;
-	unsigned short VoutA; //DCoffset;// AD5628 VoutA, Range: 0V - 2.45V, max 2048
-	unsigned short data_11;
-	unsigned short VoutC;//gain;// AD5628 VoutC, Range: 0V - 3.59V, max 2984 ??????
-	unsigned short VoutD;// AD5628 VoutD, Range: 0V - 2.895V, max 2394 ??????
-	unsigned short VoutE;// AD5628 VoutE, Range: 0V - 3.63V, max 2997, FPA VBUS
-	unsigned short data_15;
-	unsigned short data_16;
-	unsigned short data_17;
-	unsigned short data_18;
-	unsigned short data_19;
-	unsigned short frame_count;
-	unsigned short data_1b;
-	unsigned short data_1c;
-	unsigned short data_1d;
-	unsigned short data_1e;
-	unsigned short data_1f;
+	uint16_t preamble[4];
+	uint16_t modes;// 0xXXXM  Modes set last nibble
+	uint16_t serial_num_lo;
+	uint16_t serial_num_hi;
+	uint16_t hardware_ver;
+	uint16_t firmware_ver;
+	uint16_t data_09;
+	uint16_t data_0a;
+	uint16_t data_0b;
+	uint16_t data_0c;
+	uint16_t data_0d;
+	uint16_t data_0e;
+	int16_t temperature;
+	uint16_t VoutA; //DCoffset;// AD5628 VoutA, Range: 0V - 2.45V, max 2048
+	uint16_t data_11;
+	uint16_t VoutC;//gain;// AD5628 VoutC, Range: 0V - 3.59V, max 2984 ??????
+	uint16_t VoutD;// AD5628 VoutD, Range: 0V - 2.895V, max 2394 ??????
+	uint16_t VoutE;// AD5628 VoutE, Range: 0V - 3.63V, max 2997, FPA VBUS
+	uint16_t data_15;
+	uint16_t data_16;
+	uint16_t data_17;
+	uint16_t data_18;
+	uint16_t data_19;
+	uint16_t frame_count;
+	uint16_t data_1b;
+	uint16_t data_1c;
+	uint16_t data_1d;
+	uint16_t data_1e;
+	uint16_t data_1f;
 };
 
 struct thermapp_packet {
 	struct cfg_packet header;
-	short pixels_data[PIXELS_DATA_SIZE];
-	unsigned short data_pad[224];
+	int16_t pixels_data[PIXELS_DATA_SIZE];
+	uint16_t data_pad[224];
 };
 
 enum thermapp_async_status {
@@ -100,11 +101,11 @@ typedef struct thermapp {
 
 	pthread_cond_t cond_getimage;
 
-	unsigned int serial_num;
-	unsigned short hardware_ver;
-	unsigned short firmware_ver;
-	short temperature;
-	unsigned short frame_count;
+	uint32_t serial_num;
+	uint16_t hardware_ver;
+	uint16_t firmware_ver;
+	int16_t temperature;
+	uint16_t frame_count;
 
 	libusb_device_handle *dev;
 	libusb_context *ctx;
@@ -137,19 +138,19 @@ struct thermapp_packet *thermapp_FrameCapture(ThermApp *thermapp);
 
 int thermapp_FrameRequest_thread(ThermApp *thermapp);
 
-void thermapp_GetImage(ThermApp *thermapp, short *ImgData);
+void thermapp_GetImage(ThermApp *thermapp, int16_t *ImgData);
 
-int thermapp_ParsingUsbPacket(ThermApp *thermapp, short *ImgData);
+int thermapp_ParsingUsbPacket(ThermApp *thermapp, int16_t *ImgData);
 
 //void thermapp_setGain(ThermApp *thermapp, unsigned short gain);
 
 //unsigned short thermapp_getGain(ThermApp *thermapp);
 
-unsigned int thermapp_getId(ThermApp *thermapp);
+uint32_t thermapp_getId(ThermApp *thermapp);
 
 float thermapp_getTemperature(ThermApp *thermapp);
 
-unsigned short thermapp_getFrameCount(ThermApp *thermapp);
+uint16_t thermapp_getFrameCount(ThermApp *thermapp);
 
 //unsigned short thermapp_getDCoffset(ThermApp *thermapp);
 

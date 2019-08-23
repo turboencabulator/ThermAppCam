@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
 		thermapp_FrameRequest_thread(therm);
 	}
 
-	short frame[PIXELS_DATA_SIZE];
+	int16_t frame[PIXELS_DATA_SIZE];
 
 #ifndef FRAME_RAW
 	int flipv = 0;

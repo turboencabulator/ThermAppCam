@@ -247,7 +247,7 @@ void *thermapp_ThreadPipeRead(void *ctx)
 	return NULL;
 }
 
-int thermapp_ParsingUsbPacket(ThermApp *thermapp, short *ImgData)
+int thermapp_ParsingUsbPacket(ThermApp *thermapp, int16_t *ImgData)
 {
 	thermapp->serial_num = thermapp->therm_packet->header.serial_num_lo
 	                     | thermapp->therm_packet->header.serial_num_hi << 16;
@@ -296,7 +296,7 @@ int thermapp_ParsingUsbPacket(ThermApp *thermapp, short *ImgData)
 }
 
 // This function for getting frame pixel data
-void thermapp_GetImage(ThermApp *thermapp, short *ImgData)
+void thermapp_GetImage(ThermApp *thermapp, int16_t *ImgData)
 {
 	pthread_mutex_lock(&thermapp->mutex_thermapp);
 	pthread_cond_wait(&thermapp->cond_getimage, &thermapp->mutex_thermapp);
@@ -340,7 +340,7 @@ unsigned short thermapp_getGain(ThermApp *thermapp)
 }
 */
 
-unsigned int thermapp_getId(ThermApp *thermapp)
+uint32_t thermapp_getId(ThermApp *thermapp)
 {
 	return thermapp->serial_num;
 }
@@ -349,11 +349,10 @@ unsigned int thermapp_getId(ThermApp *thermapp)
 //We use experimental value.
 float thermapp_getTemperature(ThermApp *thermapp)
 {
-	short t = thermapp->temperature;
-	return (t - 14336) * 0.00652;
+	return (thermapp->temperature - 14336) * 0.00652;
 }
 
-unsigned short thermapp_getFrameCount(ThermApp *thermapp)
+uint16_t thermapp_getFrameCount(ThermApp *thermapp)
 {
 	return thermapp->frame_count;
 }

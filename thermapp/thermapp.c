@@ -29,11 +29,11 @@
 
 ThermApp *thermapp_initUSB(void)
 {
-	//fprintf(stderr, "malloc thermapp_initUSB\n");
+	int ret;
 
 	ThermApp *thermapp = malloc(sizeof *thermapp);
 	if (!thermapp) {
-		fprintf(stderr, "Can't allocate thermapp\n");
+		perror("malloc");
 		return NULL;
 	}
 
@@ -41,16 +41,16 @@ ThermApp *thermapp_initUSB(void)
 
 	thermapp->cfg = malloc(sizeof *thermapp->cfg);
 	if (!thermapp->cfg) {
+		perror("malloc");
 		free(thermapp);
-		fprintf(stderr, "Can't allocate cfg_packet\n");
 		return NULL;
 	}
 
 	thermapp->therm_packet = malloc(sizeof *thermapp->therm_packet);
 	if (!thermapp->therm_packet) {
+		perror("malloc");
 		free(thermapp->cfg);
 		free(thermapp);
-		fprintf(stderr, "Can't allocate thermapp_packet\n");
 		return NULL;
 	}
 
@@ -91,27 +91,24 @@ ThermApp *thermapp_initUSB(void)
 
 	thermapp->async_status = THERMAPP_INACTIVE;
 
-	//Init libusb
-	if (libusb_init(&thermapp->ctx) < 0) {
+	ret = libusb_init(&thermapp->ctx);
+	if (ret) {
+		fprintf(stderr, "libusb_init: %s\n", libusb_strerror(ret));
 		free(thermapp->therm_packet);
 		free(thermapp->cfg);
 		free(thermapp);
-		fprintf(stderr, "failed to initialize libusb\n");
 		return NULL;
 	}
 
-	//fprintf(stderr, "PTHREAD INITIALIZER\n");
-
-	//init thread condition
 	thermapp->cond_getimage = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
 	thermapp->mutex_thermapp = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 
-	//Make fifo pipe
-	if (pipe(thermapp->fd_pipe) == -1) {
+	ret = pipe(thermapp->fd_pipe);
+	if (ret) {
+		perror("pipe");
 		free(thermapp->therm_packet);
 		free(thermapp->cfg);
 		free(thermapp);
-		perror("pipe");
 		return NULL;
 	}
 	//thermapp->lost_packet = 0;
@@ -121,32 +118,35 @@ ThermApp *thermapp_initUSB(void)
 
 int thermapp_USB_checkForDevice(ThermApp *thermapp, int vendor, int product)
 {
-	//puts("libusb_open_device_with_vid_pid\n");
+	int ret;
 
 	///FIXME: For Debug use libusb_open_device_with_vid_pid
 	/// need to add search device
 	thermapp->dev = libusb_open_device_with_vid_pid(thermapp->ctx, vendor, product);
 	if (!thermapp->dev) {
+		ret = LIBUSB_ERROR_NO_DEVICE;
+		fprintf(stderr, "libusb_open_device_with_vid_pid: %s\n", libusb_strerror(ret));
 		free(thermapp->cfg);
 		free(thermapp);
-		fprintf(stderr, "Open device with vid pid failed\n");
 		return -1;
 	}
 
-	if (libusb_set_configuration(thermapp->dev, 1)) {
+	ret = libusb_set_configuration(thermapp->dev, 1);
+	if (ret) {
+		fprintf(stderr, "libusb_set_configuration: %s\n", libusb_strerror(ret));
 		free(thermapp->cfg);
 		free(thermapp);
-		fprintf(stderr, "set configuration failed\n");
 		return -1;
 	}
 
 	//if (libusb_kernel_driver_active(thermapp->dev, 0))
 	//	libusb_detach_kernel_driver(thermapp->dev, 0);
 
-	if (libusb_claim_interface(thermapp->dev, 0)) {
+	ret = libusb_claim_interface(thermapp->dev, 0);
+	if (ret) {
+		fprintf(stderr, "libusb_claim_interface: %s\n", libusb_strerror(ret));
 		free(thermapp->cfg);
 		free(thermapp);
-		fprintf(stderr, "claim interface failed\n");
 		return -1;
 	}
 
@@ -161,7 +161,7 @@ void THERMAPP_CALL thermapp_PipeWrite(unsigned char *buf, uint32_t len, void *ct
 
 	if (len && ctx) {
 		if ((w_len = write(*(int *)ctx, buf, len)) <= 0) {
-			perror("fifo write");
+			perror("pipe write");
 		}
 		//FIXME: w_len return can be smaller len
 		if (w_len < len) {
@@ -174,11 +174,10 @@ void *thermapp_ThreadReadAsync(void *ctx)
 {
 	ThermApp *thermapp = ctx;
 
-	puts("thermapp_ThreadReadAsync run\n");
+	puts("thermapp_ThreadReadAsync run");
 	thermapp_read_async(thermapp, thermapp_PipeWrite, (void *)&thermapp->fd_pipe[1]);
 
-	puts("close(thermapp->fd_pipe[1])\n");
-
+	puts("close(thermapp->fd_pipe[1])");
 	close(thermapp->fd_pipe[1]);
 	thermapp->fd_pipe[1] = 0;
 
@@ -194,13 +193,12 @@ void *thermapp_ThreadPipeRead(void *ctx)
 
 	enum thermapp_async_status current_status = THERMAPP_RUNNING;
 
-	puts("thermapp_ThreadPipeRead run\n");
+	puts("thermapp_ThreadPipeRead run");
 	while (current_status == THERMAPP_RUNNING) {
 
 		for (len = 0; len < sizeof header; ) {
 			if ((ret = read(thermapp->fd_pipe[0], (char *)&header + len, sizeof header - len)) <= 0) {
-				fprintf(stderr, "read thermapp_ThreadPipeRead()\n");
-				perror("fifo pipe read");
+				perror("pipe read");
 				break;
 			}
 			len += ret;
@@ -217,8 +215,7 @@ void *thermapp_ThreadPipeRead(void *ctx)
 			for (len = sizeof header; len < sizeof *thermapp->therm_packet; ) {
 				ret = read(thermapp->fd_pipe[0], (char *)thermapp->therm_packet + len, sizeof *thermapp->therm_packet - len);
 				if (ret <= 0) {
-					fprintf(stderr, "read thermapp_ThreadPipeRead()\n");
-					perror("fifo pipe read");
+					perror("pipe read");
 					pthread_mutex_unlock(&thermapp->mutex_thermapp);
 					break;
 				}
@@ -240,7 +237,6 @@ void *thermapp_ThreadPipeRead(void *ctx)
 	}
 
 	fprintf(stderr, "close(thermapp->fd_pipe[0]);\n");
-
 	close(thermapp->fd_pipe[0]);
 	thermapp->fd_pipe[0] = 0;
 
@@ -310,17 +306,17 @@ void thermapp_GetImage(ThermApp *thermapp, int16_t *ImgData)
 // Create read and write thread
 int thermapp_FrameRequest_thread(ThermApp *thermapp)
 {
-	int  ret;
+	int ret;
 
 	ret = pthread_create(&thermapp->pthreadReadAsync, NULL, thermapp_ThreadReadAsync, (void *)thermapp);
 	if (ret) {
-		fprintf(stderr, "Error - pthread_create() return code: %d\n", ret);
+		fprintf(stderr, "pthread_create: %s\n", strerror(ret));
 		return -1;
 	}
 
 	ret = pthread_create(&thermapp->pthreadReadPipe, NULL, thermapp_ThreadPipeRead, (void *)thermapp);
 	if (ret) {
-		fprintf(stderr, "Error - pthread_create() return code: %d\n", ret);
+		fprintf(stderr, "pthread_create: %s\n", strerror(ret));
 		return -1;
 	}
 
@@ -379,19 +375,20 @@ int thermapp_LoadCalibrate(ThermApp *thermapp, unsigned int id)
 //Transfer function for put date to ThermApp
 static void LIBUSB_CALL transfer_cb_out(struct libusb_transfer *transfer)
 {
+	int ret;
 	ThermApp *thermapp = transfer->user_data;
 
 	if (transfer->status != LIBUSB_TRANSFER_COMPLETED) {
-		fprintf(stderr, "transfer_cb_out() : in transfer status %d\n", transfer->status);
+		fprintf(stderr, "in transfer_cb_out(): transfer status %d\n", transfer->status);
 		libusb_free_transfer(transfer);
 		thermapp->transfer_out = NULL;
 		return;
 	}
 
-	if (libusb_submit_transfer(thermapp->transfer_out) < 0) {
-		fprintf(stderr, "in transfer libusb_submit_transfer\n");
+	ret = libusb_submit_transfer(thermapp->transfer_out);
+	if (ret) {
+		fprintf(stderr, "libusb_submit_transfer: %s\n", libusb_strerror(ret));
 	}
-
 }
 
 static
@@ -410,9 +407,9 @@ void LIBUSB_CALL _libusb_callback(struct libusb_transfer *transfer)
 		libusb_submit_transfer(transfer); /* resubmit transfer */
 	} else if (LIBUSB_TRANSFER_ERROR == transfer->status
 	        || LIBUSB_TRANSFER_NO_DEVICE == transfer->status) {
+		fprintf(stderr, "LIBUSB_TRANSFER_ERROR or LIBUSB_TRANSFER_NO_DEVICE\n");
 		thermapp->dev_lost = 1;
 		thermapp_cancel_async(thermapp);
-		fprintf(stderr, "LIBUSB_TRANSFER_ERROR or LIBUSB_TRANSFER_NO_DEVICE\n");
 	}
 }
 
@@ -420,7 +417,7 @@ int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *c
 {
 	fprintf(stderr, "thermapp_read_async\n");
 
-	int r = 0;
+	int ret;
 	struct timeval tv = { 1, 0 };
 	struct timeval zerotv = { 0, 0 };
 	enum thermapp_async_status next_status = THERMAPP_INACTIVE;
@@ -453,7 +450,7 @@ int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *c
 	                          transfer_cb_out,
 	                          thermapp,
 	                          0);
-	r = libusb_submit_transfer(thermapp->transfer_out);
+	ret = libusb_submit_transfer(thermapp->transfer_out);
 
 	libusb_fill_bulk_transfer(thermapp->transfer_in,
 	                          thermapp->dev,
@@ -463,19 +460,18 @@ int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *c
 	                          _libusb_callback,
 	                          (void *)thermapp,
 	                          BULK_TIMEOUT);
-	r = libusb_submit_transfer(thermapp->transfer_in);
-	if (r < 0) {
-		fprintf(stderr, "Failed to submit transfer!\n");
+	ret = libusb_submit_transfer(thermapp->transfer_in);
+	if (ret) {
+		fprintf(stderr, "libusb_submit_transfer: %s\n", libusb_strerror(ret));
 		thermapp->async_status = THERMAPP_CANCELING;
 	}
 
 	while (THERMAPP_INACTIVE != thermapp->async_status) {
-		r = libusb_handle_events_timeout_completed(thermapp->ctx, &tv, &thermapp->async_cancel);
-		//r = libusb_handle_events_completed(thermapp->ctx, &thermapp->async_cancel);
-		if (r < 0) {
-			fprintf(stderr, "handle_events returned: %d\n", r);
-			if (r == LIBUSB_ERROR_INTERRUPTED) /* stray signal */ {
-				fprintf(stderr, "LIBUSB_ERROR_INTERRUPTED\n");
+		ret = libusb_handle_events_timeout_completed(thermapp->ctx, &tv, &thermapp->async_cancel);
+		//ret = libusb_handle_events_completed(thermapp->ctx, &thermapp->async_cancel);
+		if (ret) {
+			fprintf(stderr, "libusb_handle_events_timeout_completed: %s\n", libusb_strerror(ret));
+			if (ret == LIBUSB_ERROR_INTERRUPTED) /* stray signal */ {
 				continue;
 			}
 			break;
@@ -490,12 +486,12 @@ int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *c
 				break;
 
 			if (LIBUSB_TRANSFER_CANCELLED != thermapp->transfer_in->status) {
-				r = libusb_cancel_transfer(thermapp->transfer_in);
+				ret = libusb_cancel_transfer(thermapp->transfer_in);
 				// handle events after cancelling
 				// to allow transfer status to
 				// propagate
 				libusb_handle_events_timeout_completed(thermapp->ctx, &zerotv, NULL);
-				if (r == 0)
+				if (ret == 0)
 					next_status = THERMAPP_CANCELING;
 			}
 
@@ -522,7 +518,7 @@ int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *c
 
 	thermapp->async_status = next_status;
 
-	return r;
+	return ret;
 }
 
 int thermapp_cancel_async(ThermApp *thermapp)

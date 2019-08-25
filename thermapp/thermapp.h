@@ -28,7 +28,7 @@
 #define VENDOR  0x1772
 #define PRODUCT 0x0002
 
-#define TRANSFER_SIZE 512
+#define TRANSFER_SIZE 8192
 
 #define FRAME_WIDTH  384
 #define FRAME_HEIGHT 288

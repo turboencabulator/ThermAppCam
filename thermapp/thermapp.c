@@ -27,7 +27,8 @@
 #include "thermapp.h"
 
 
-ThermApp *thermapp_initUSB(void)
+ThermApp *
+thermapp_initUSB(void)
 {
 	int ret;
 
@@ -116,7 +117,8 @@ ThermApp *thermapp_initUSB(void)
 	return thermapp;
 }
 
-int thermapp_USB_checkForDevice(ThermApp *thermapp, int vendor, int product)
+int
+thermapp_USB_checkForDevice(ThermApp *thermapp, int vendor, int product)
 {
 	int ret;
 
@@ -153,8 +155,8 @@ int thermapp_USB_checkForDevice(ThermApp *thermapp, int vendor, int product)
 	return 0;
 }
 
-static
-void THERMAPP_CALL thermapp_PipeWrite(unsigned char *buf, uint32_t len, void *ctx)
+static void THERMAPP_CALL
+thermapp_PipeWrite(unsigned char *buf, uint32_t len, void *ctx)
 {
 	//fprintf(stderr, "therm_callback\n");
 	unsigned int w_len;
@@ -170,176 +172,29 @@ void THERMAPP_CALL thermapp_PipeWrite(unsigned char *buf, uint32_t len, void *ct
 	}
 }
 
-void *thermapp_ThreadReadAsync(void *ctx)
+static int
+thermapp_cancel_async(ThermApp *thermapp)
 {
-	ThermApp *thermapp = ctx;
-
-	puts("thermapp_ThreadReadAsync run");
-	thermapp_read_async(thermapp, thermapp_PipeWrite, (void *)&thermapp->fd_pipe[1]);
-
-	puts("close(thermapp->fd_pipe[1])");
-	close(thermapp->fd_pipe[1]);
-	thermapp->fd_pipe[1] = 0;
-
-	return NULL;
-}
-
-void *thermapp_ThreadPipeRead(void *ctx)
-{
-	ThermApp *thermapp = (ThermApp *)ctx;
-	struct cfg_packet header;
-	size_t len;
-	ssize_t ret;
-
-	enum thermapp_async_status current_status = THERMAPP_RUNNING;
-
-	puts("thermapp_ThreadPipeRead run");
-	while (current_status == THERMAPP_RUNNING) {
-
-		for (len = 0; len < sizeof header; ) {
-			if ((ret = read(thermapp->fd_pipe[0], (char *)&header + len, sizeof header - len)) <= 0) {
-				perror("pipe read");
-				break;
-			}
-			len += ret;
-			//fprintf(stderr, "ret: %d, len: %d\n", ret, len);
-		}
-
-		//fprintf(stderr, "thermapp_ThreadPipeRead(): thermapp->async_status =  %d\n", thermapp->async_status);
-
-		// FIXME:  Assumes frame start is always 64-byte aligned.
-		if (memcmp(&header, thermapp->cfg, sizeof header.preamble) == 0) {
-			//fprintf(stderr, "FRAME_START\n");
-			pthread_mutex_lock(&thermapp->mutex_thermapp);
-			thermapp->therm_packet->header = header;
-			for (len = sizeof header; len < sizeof *thermapp->therm_packet; ) {
-				ret = read(thermapp->fd_pipe[0], (char *)thermapp->therm_packet + len, sizeof *thermapp->therm_packet - len);
-				if (ret <= 0) {
-					perror("pipe read");
-					pthread_mutex_unlock(&thermapp->mutex_thermapp);
-					break;
-				}
-				len += ret;
-				//fprintf(stderr, "ret: %d, len: %d\n", ret, len);
-			}
-
-			if (1) { // FIXME:  Find a way to check the size.
-				//fprintf(stderr, "FRAME_OK\n");
-				pthread_cond_broadcast(&thermapp->cond_getimage);
-			} else {
-				fprintf(stderr, "lost frame\n");
-				thermapp->lost_packet++; //increment damaged frames counter
-			}
-
-			current_status = thermapp->async_status;
-			pthread_mutex_unlock(&thermapp->mutex_thermapp);
-		}
+	// if streaming, try to cancel gracefully
+	if (THERMAPP_RUNNING == thermapp->async_status) {
+		thermapp->async_status = THERMAPP_CANCELING;
+		thermapp->async_cancel = 1;
+		return 0;
 	}
 
-	fprintf(stderr, "close(thermapp->fd_pipe[0]);\n");
-	close(thermapp->fd_pipe[0]);
-	thermapp->fd_pipe[0] = 0;
-
-	return NULL;
-}
-
-int thermapp_ParsingUsbPacket(ThermApp *thermapp, int16_t *ImgData)
-{
-	thermapp->serial_num = thermapp->therm_packet->header.serial_num_lo
-	                     | thermapp->therm_packet->header.serial_num_hi << 16;
-	thermapp->hardware_ver = thermapp->therm_packet->header.hardware_ver;
-	thermapp->firmware_ver = thermapp->therm_packet->header.firmware_ver;
-	thermapp->temperature = thermapp->therm_packet->header.temperature;
-	thermapp->frame_count = thermapp->therm_packet->header.frame_count;
-
-	memcpy(ImgData, thermapp->therm_packet->pixels_data, PIXELS_DATA_SIZE*2);
-
-	return 1;
-}
-
-// This function for getting frame pixel data
-void thermapp_GetImage(ThermApp *thermapp, int16_t *ImgData)
-{
-	pthread_mutex_lock(&thermapp->mutex_thermapp);
-	pthread_cond_wait(&thermapp->cond_getimage, &thermapp->mutex_thermapp);
-
-	thermapp_ParsingUsbPacket(thermapp, ImgData);
-
-	pthread_mutex_unlock(&thermapp->mutex_thermapp);
-}
-
-
-// Create read and write thread
-int thermapp_FrameRequest_thread(ThermApp *thermapp)
-{
-	int ret;
-
-	ret = pthread_create(&thermapp->pthreadReadAsync, NULL, thermapp_ThreadReadAsync, (void *)thermapp);
-	if (ret) {
-		fprintf(stderr, "pthread_create: %s\n", strerror(ret));
-		return -1;
+	// if called while in pending state, change the state forcefully
+#if 0
+	if (THERMAPP_INACTIVE != thermapp->async_status) {
+		thermapp->async_status = THERMAPP_INACTIVE;
+		return 0;
 	}
-
-	ret = pthread_create(&thermapp->pthreadReadPipe, NULL, thermapp_ThreadPipeRead, (void *)thermapp);
-	if (ret) {
-		fprintf(stderr, "pthread_create: %s\n", strerror(ret));
-		return -1;
-	}
-
-	return 1;
+#endif
+	return -2;
 }
-
-
-/*
-void thermapp_setGain(ThermApp *thermapp, unsigned short gain)
-{
-	//thermapp->cfg->gain = gain;
-}
-
-unsigned short thermapp_getGain(ThermApp *thermapp)
-{
-	//return thermapp->cfg->gain;
-}
-*/
-
-uint32_t thermapp_getId(ThermApp *thermapp)
-{
-	return thermapp->serial_num;
-}
-
-//We don't know offset and quant value for temperature.
-//We use experimental value.
-float thermapp_getTemperature(ThermApp *thermapp)
-{
-	return (thermapp->temperature - 14336) * 0.00652;
-}
-
-uint16_t thermapp_getFrameCount(ThermApp *thermapp)
-{
-	return thermapp->frame_count;
-}
-
-/*
-unsigned short thermapp_getDCoffset(ThermApp *thermapp)
-{
-	//return thermapp->cfg->DCoffset;
-}
-
-void thermapp_setDCoffset(ThermApp *thermapp, unsigned short offset)
-{
-	//thermapp->cfg->DCoffset = offset;
-}
-*/
-
-/*
-int thermapp_LoadCalibrate(ThermApp *thermapp, unsigned int id)
-{
-	return 0;
-}
-*/
 
 //Transfer function for put date to ThermApp
-static void LIBUSB_CALL transfer_cb_out(struct libusb_transfer *transfer)
+static void LIBUSB_CALL
+transfer_cb_out(struct libusb_transfer *transfer)
 {
 	int ret;
 	ThermApp *thermapp = transfer->user_data;
@@ -357,11 +212,9 @@ static void LIBUSB_CALL transfer_cb_out(struct libusb_transfer *transfer)
 	}
 }
 
-static
-void LIBUSB_CALL _libusb_callback(struct libusb_transfer *transfer)
+static void LIBUSB_CALL
+transfer_cb_in(struct libusb_transfer *transfer)
 {
-	//fprintf(stderr, "LIBUSB_CALL _libusb_callback\n");
-
 	ThermApp *thermapp = (ThermApp *)transfer->user_data;
 
 	if (LIBUSB_TRANSFER_COMPLETED == transfer->status) {
@@ -379,7 +232,8 @@ void LIBUSB_CALL _libusb_callback(struct libusb_transfer *transfer)
 	}
 }
 
-int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *ctx)
+static int
+thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *ctx)
 {
 	fprintf(stderr, "thermapp_read_async\n");
 
@@ -387,11 +241,6 @@ int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *c
 	struct timeval tv = { 1, 0 };
 	struct timeval zerotv = { 0, 0 };
 	enum thermapp_async_status next_status = THERMAPP_INACTIVE;
-
-	if (!thermapp) {
-		fprintf(stderr, "!thermapp\n");
-		return -1;
-	}
 
 	if (THERMAPP_INACTIVE != thermapp->async_status) {
 		fprintf(stderr, "THERMAPP_INACTIVE != thermapp->async_status\n");
@@ -423,7 +272,7 @@ int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *c
 	                          LIBUSB_ENDPOINT_IN | 1,
 	                          thermapp->transfer_buf,
 	                          512,
-	                          _libusb_callback,
+	                          transfer_cb_in,
 	                          (void *)thermapp,
 	                          BULK_TIMEOUT);
 	ret = libusb_submit_transfer(thermapp->transfer_in);
@@ -487,30 +336,172 @@ int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *c
 	return ret;
 }
 
-int thermapp_cancel_async(ThermApp *thermapp)
+static void *
+thermapp_ThreadReadAsync(void *ctx)
 {
-	if (!thermapp)
-		return -1;
+	ThermApp *thermapp = ctx;
 
-	// if streaming, try to cancel gracefully
-	if (THERMAPP_RUNNING == thermapp->async_status) {
-		thermapp->async_status = THERMAPP_CANCELING;
-		thermapp->async_cancel = 1;
-		return 0;
+	puts("thermapp_ThreadReadAsync run");
+	thermapp_read_async(thermapp, thermapp_PipeWrite, (void *)&thermapp->fd_pipe[1]);
+
+	puts("close(thermapp->fd_pipe[1])");
+	close(thermapp->fd_pipe[1]);
+	thermapp->fd_pipe[1] = 0;
+
+	return NULL;
+}
+
+static void *
+thermapp_ThreadPipeRead(void *ctx)
+{
+	ThermApp *thermapp = (ThermApp *)ctx;
+	struct cfg_packet header;
+	size_t len;
+	ssize_t ret;
+
+	enum thermapp_async_status current_status = THERMAPP_RUNNING;
+
+	puts("thermapp_ThreadPipeRead run");
+	while (current_status == THERMAPP_RUNNING) {
+
+		for (len = 0; len < sizeof header; ) {
+			if ((ret = read(thermapp->fd_pipe[0], (char *)&header + len, sizeof header - len)) <= 0) {
+				perror("pipe read");
+				break;
+			}
+			len += ret;
+			//fprintf(stderr, "ret: %d, len: %d\n", ret, len);
+		}
+
+		//fprintf(stderr, "thermapp_ThreadPipeRead(): thermapp->async_status =  %d\n", thermapp->async_status);
+
+		// FIXME:  Assumes frame start is always 64-byte aligned.
+		if (memcmp(&header, thermapp->cfg, sizeof header.preamble) == 0) {
+			//fprintf(stderr, "FRAME_START\n");
+			pthread_mutex_lock(&thermapp->mutex_thermapp);
+			thermapp->therm_packet->header = header;
+			for (len = sizeof header; len < sizeof *thermapp->therm_packet; ) {
+				ret = read(thermapp->fd_pipe[0], (char *)thermapp->therm_packet + len, sizeof *thermapp->therm_packet - len);
+				if (ret <= 0) {
+					perror("pipe read");
+					pthread_mutex_unlock(&thermapp->mutex_thermapp);
+					break;
+				}
+				len += ret;
+				//fprintf(stderr, "ret: %d, len: %d\n", ret, len);
+			}
+
+			if (1) { // FIXME:  Find a way to check the size.
+				//fprintf(stderr, "FRAME_OK\n");
+				pthread_cond_broadcast(&thermapp->cond_getimage);
+			} else {
+				fprintf(stderr, "lost frame\n");
+				thermapp->lost_packet++; //increment damaged frames counter
+			}
+
+			current_status = thermapp->async_status;
+			pthread_mutex_unlock(&thermapp->mutex_thermapp);
+		}
 	}
 
-	// if called while in pending state, change the state forcefully
-#if 0
-	if (THERMAPP_INACTIVE != thermapp->async_status) {
-		thermapp->async_status = THERMAPP_INACTIVE;
-		return 0;
-	}
-#endif
-	return -2;
+	fprintf(stderr, "close(thermapp->fd_pipe[0]);\n");
+	close(thermapp->fd_pipe[0]);
+	thermapp->fd_pipe[0] = 0;
+
+	return NULL;
+}
+
+// This function for getting frame pixel data
+void
+thermapp_GetImage(ThermApp *thermapp, int16_t *ImgData)
+{
+	pthread_mutex_lock(&thermapp->mutex_thermapp);
+	pthread_cond_wait(&thermapp->cond_getimage, &thermapp->mutex_thermapp);
+
+	thermapp->serial_num = thermapp->therm_packet->header.serial_num_lo
+	                     | thermapp->therm_packet->header.serial_num_hi << 16;
+	thermapp->hardware_ver = thermapp->therm_packet->header.hardware_ver;
+	thermapp->firmware_ver = thermapp->therm_packet->header.firmware_ver;
+	thermapp->temperature = thermapp->therm_packet->header.temperature;
+	thermapp->frame_count = thermapp->therm_packet->header.frame_count;
+
+	memcpy(ImgData, thermapp->therm_packet->pixels_data, PIXELS_DATA_SIZE*2);
+
+	pthread_mutex_unlock(&thermapp->mutex_thermapp);
 }
 
 
-int thermapp_Close(ThermApp *thermapp)
+// Create read and write thread
+int
+thermapp_FrameRequest_thread(ThermApp *thermapp)
+{
+	int ret;
+
+	ret = pthread_create(&thermapp->pthreadReadAsync, NULL, thermapp_ThreadReadAsync, (void *)thermapp);
+	if (ret) {
+		fprintf(stderr, "pthread_create: %s\n", strerror(ret));
+		return -1;
+	}
+
+	ret = pthread_create(&thermapp->pthreadReadPipe, NULL, thermapp_ThreadPipeRead, (void *)thermapp);
+	if (ret) {
+		fprintf(stderr, "pthread_create: %s\n", strerror(ret));
+		return -1;
+	}
+
+	return 1;
+}
+
+#if 0
+void
+thermapp_setGain(ThermApp *thermapp, unsigned short gain)
+{
+	thermapp->cfg->gain = gain;
+}
+
+unsigned short
+thermapp_getGain(ThermApp *thermapp)
+{
+	return thermapp->cfg->gain;
+}
+#endif
+
+uint32_t
+thermapp_getId(ThermApp *thermapp)
+{
+	return thermapp->serial_num;
+}
+
+//We don't know offset and quant value for temperature.
+//We use experimental value.
+float
+thermapp_getTemperature(ThermApp *thermapp)
+{
+	return (thermapp->temperature - 14336) * 0.00652;
+}
+
+uint16_t
+thermapp_getFrameCount(ThermApp *thermapp)
+{
+	return thermapp->frame_count;
+}
+
+#if 0
+unsigned short
+thermapp_getDCoffset(ThermApp *thermapp)
+{
+	return thermapp->cfg->DCoffset;
+}
+
+void
+thermapp_setDCoffset(ThermApp *thermapp, unsigned short offset)
+{
+	thermapp->cfg->DCoffset = offset;
+}
+#endif
+
+int
+thermapp_Close(ThermApp *thermapp)
 {
 	if (!thermapp)
 		return -1;

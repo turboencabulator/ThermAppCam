@@ -131,15 +131,9 @@ ThermApp *thermapp_initUSB(void);
 
 int thermapp_USB_checkForDevice(ThermApp *thermapp, int vendor, int product);
 
-int thermapp_SendConfigurationHeader(ThermApp *thermapp, unsigned char *data, int lengh);
-
-struct thermapp_packet *thermapp_FrameCapture(ThermApp *thermapp);
-
 int thermapp_FrameRequest_thread(ThermApp *thermapp);
 
 void thermapp_GetImage(ThermApp *thermapp, int16_t *ImgData);
-
-int thermapp_ParsingUsbPacket(ThermApp *thermapp, int16_t *ImgData);
 
 //void thermapp_setGain(ThermApp *thermapp, unsigned short gain);
 
@@ -154,13 +148,6 @@ uint16_t thermapp_getFrameCount(ThermApp *thermapp);
 //unsigned short thermapp_getDCoffset(ThermApp *thermapp);
 
 //void thermapp_setDCoffset(ThermApp *thermapp, unsigned short offset);
-
-int thermapp_CalibrateFile(ThermApp *thermapp, FILE *file);
-
-int thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *ctx
-                        /*uint32_t buf_num, uint32_t buf_len*/);
-
-int thermapp_cancel_async(ThermApp *thermapp);
 
 int thermapp_Close(ThermApp *thermapp);
 

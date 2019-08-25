@@ -25,18 +25,14 @@
 
 #include <libusb.h>
 
-#define VENDOR  (0x1772)
-#define PRODUCT (0x0002)
+#define VENDOR  0x1772
+#define PRODUCT 0x0002
 
-#define PIXELS_DATA_SIZE    (384*288)
+#define TRANSFER_SIZE 512
 
-#define BULK_TIMEOUT 0
-
-#ifndef FALSE
-	#define FALSE 0
-	#define TRUE 1
-#endif
-
+#define FRAME_WIDTH  384
+#define FRAME_HEIGHT 288
+#define PIXELS_DATA_SIZE (FRAME_WIDTH * FRAME_HEIGHT)
 
 // AD5628 DAC in Therm App is for generating control voltage
 // VREF = 2.5 volts 11 Bit

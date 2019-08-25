@@ -217,16 +217,16 @@ thermapp_read_async(ThermApp *thermapp)
 		thermapp->transfer_out = NULL;
 	}
 
-	thermapp->transfer_buf = malloc(512);
+	thermapp->transfer_buf = malloc(TRANSFER_SIZE);
 	thermapp->transfer_in = libusb_alloc_transfer(0);
 	libusb_fill_bulk_transfer(thermapp->transfer_in,
 	                          thermapp->dev,
 	                          LIBUSB_ENDPOINT_IN | 1,
 	                          thermapp->transfer_buf,
-	                          512,
+	                          TRANSFER_SIZE,
 	                          transfer_cb_in,
 	                          (void *)thermapp,
-	                          BULK_TIMEOUT);
+	                          0);
 	ret = libusb_submit_transfer(thermapp->transfer_in);
 	if (ret) {
 		fprintf(stderr, "libusb_submit_transfer: %s\n", libusb_strerror(ret));

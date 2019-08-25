@@ -12,8 +12,6 @@
 #include <assert.h>
 
 #define VIDEO_DEVICE "/dev/video0"
-#define FRAME_WIDTH  384
-#define FRAME_HEIGHT 288
 #undef FRAME_RAW
 
 #ifndef FRAME_RAW

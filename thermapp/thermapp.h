@@ -1,5 +1,6 @@
 /***************************************************************************
-* Copyright (C) 2015 by Alexander G  <pidbip@gmail.com>                    *
+* Copyright (C) 2015 by Alexander G <pidbip@gmail.com>                     *
+* Copyright (C) 2019 by Kyle Guinn <elyk03@gmail.com>                      *
 *                                                                          *
 * This program is free software: you can redistribute it and/or modify     *
 * it under the terms of the GNU General Public License as published by     *
@@ -13,7 +14,6 @@
 *                                                                          *
 * You should have received a copy of the GNU General Public License        *
 * along with this program. If not, see <http://www.gnu.org/licenses/>.     *
-*                                                                          *
 ***************************************************************************/
 
 #ifndef THERMAPP_H_
@@ -80,7 +80,8 @@ typedef struct thermapp {
 	struct libusb_transfer *transfer_in;
 	struct libusb_transfer *transfer_out;
 
-	pthread_t pthreadReadAsync;
+	int started_read_async;
+	pthread_t pthread_read_async;
 	pthread_mutex_t mutex_getimage;
 	pthread_cond_t cond_getimage;
 	int complete;
@@ -101,7 +102,7 @@ int thermapp_usb_connect(ThermApp *thermapp);
 int thermapp_thread_create(ThermApp *thermapp);
 int thermapp_close(ThermApp *thermapp);
 
-void thermapp_getImage(ThermApp *thermapp, int16_t *ImgData);
+int thermapp_getImage(ThermApp *thermapp, int16_t *ImgData);
 uint32_t thermapp_getId(ThermApp *thermapp);
 float thermapp_getTemperature(ThermApp *thermapp);
 uint16_t thermapp_getFrameCount(ThermApp *thermapp);

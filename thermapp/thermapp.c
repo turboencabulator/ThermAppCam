@@ -1,5 +1,6 @@
 /***************************************************************************
-* Copyright (C) 2015 by Alexander G  <pidbip@gmail.com>                    *
+* Copyright (C) 2015 by Alexander G <pidbip@gmail.com>                     *
+* Copyright (C) 2019 by Kyle Guinn <elyk03@gmail.com>                      *
 *                                                                          *
 * This program is free software: you can redistribute it and/or modify     *
 * it under the terms of the GNU General Public License as published by     *
@@ -13,7 +14,6 @@
 *                                                                          *
 * You should have received a copy of the GNU General Public License        *
 * along with this program. If not, see <http://www.gnu.org/licenses/>.     *
-*                                                                          *
 ***************************************************************************/
 
 #include <stdio.h>
@@ -128,7 +128,7 @@ thermapp_usb_connect(ThermApp *thermapp)
 }
 
 static void
-thermapp_cancel_async(ThermApp *thermapp)
+thermapp_cancel_async(ThermApp *thermapp, int internal)
 {
 	if (thermapp->transfer_in) {
 		int ret = libusb_cancel_transfer(thermapp->transfer_in);
@@ -141,6 +141,17 @@ thermapp_cancel_async(ThermApp *thermapp)
 		int ret = libusb_cancel_transfer(thermapp->transfer_out);
 		if (ret && ret != LIBUSB_ERROR_NOT_FOUND) {
 			fprintf(stderr, "libusb_cancel_transfer: %s\n", libusb_strerror(ret));
+		}
+	}
+
+	if (internal) {
+		if (!thermapp->transfer_in && !thermapp->transfer_out) {
+			// All transfers cancelled.
+			// End the event loop and wake all waiters so they can exit.
+			pthread_mutex_lock(&thermapp->mutex_getimage);
+			thermapp->complete = 1;
+			pthread_cond_broadcast(&thermapp->cond_getimage);
+			pthread_mutex_unlock(&thermapp->mutex_getimage);
 		}
 	}
 }
@@ -161,8 +172,7 @@ transfer_cb_out(struct libusb_transfer *transfer)
 		libusb_free_transfer(thermapp->transfer_out);
 		thermapp->transfer_out = NULL;
 
-		thermapp_cancel_async(thermapp);
-		thermapp->complete = thermapp->transfer_in == NULL;
+		thermapp_cancel_async(thermapp, 1);
 	}
 }
 
@@ -226,14 +236,15 @@ transfer_cb_in(struct libusb_transfer *transfer)
 		libusb_free_transfer(thermapp->transfer_in);
 		thermapp->transfer_in = NULL;
 
-		thermapp_cancel_async(thermapp);
-		thermapp->complete = thermapp->transfer_out == NULL;
+		thermapp_cancel_async(thermapp, 1);
 	}
 }
 
-static void
-thermapp_read_async(ThermApp *thermapp)
+static void *
+thermapp_read_async(void *ctx)
 {
+	ThermApp *thermapp = (ThermApp *)ctx;
+
 	fprintf(stderr, "thermapp_read_async\n");
 
 	int ret;
@@ -281,15 +292,6 @@ thermapp_read_async(ThermApp *thermapp)
 			}
 		}
 	}
-}
-
-static void *
-thermapp_ThreadReadAsync(void *ctx)
-{
-	ThermApp *thermapp = (ThermApp *)ctx;
-
-	puts("thermapp_ThreadReadAsync run");
-	thermapp_read_async(thermapp);
 
 	return NULL;
 }
@@ -304,11 +306,12 @@ thermapp_thread_create(ThermApp *thermapp)
 	thermapp->mutex_getimage = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 	thermapp->complete = 0;
 
-	ret = pthread_create(&thermapp->pthreadReadAsync, NULL, thermapp_ThreadReadAsync, (void *)thermapp);
+	ret = pthread_create(&thermapp->pthread_read_async, NULL, thermapp_read_async, (void *)thermapp);
 	if (ret) {
 		fprintf(stderr, "pthread_create: %s\n", strerror(ret));
 		return -1;
 	}
+	thermapp->started_read_async = 1;
 
 	return 0;
 }
@@ -319,9 +322,11 @@ thermapp_close(ThermApp *thermapp)
 	if (!thermapp)
 		return -1;
 
-	thermapp_cancel_async(thermapp);
+	thermapp_cancel_async(thermapp, 0);
 
-	sleep(1);
+	if (thermapp->started_read_async) {
+		pthread_join(thermapp->pthread_read_async, NULL);
+	}
 
 	if (thermapp->dev) {
 		libusb_release_interface(thermapp->dev, 0);
@@ -341,22 +346,30 @@ thermapp_close(ThermApp *thermapp)
 }
 
 // This function for getting frame pixel data
-void
+int
 thermapp_getImage(ThermApp *thermapp, int16_t *ImgData)
 {
+	int ret = 0;
+
 	pthread_mutex_lock(&thermapp->mutex_getimage);
 	pthread_cond_wait(&thermapp->cond_getimage, &thermapp->mutex_getimage);
 
-	thermapp->serial_num = thermapp->data_done->header.serial_num_lo
-	                     | thermapp->data_done->header.serial_num_hi << 16;
-	thermapp->hardware_ver = thermapp->data_done->header.hardware_ver;
-	thermapp->firmware_ver = thermapp->data_done->header.firmware_ver;
-	thermapp->temperature = thermapp->data_done->header.temperature;
-	thermapp->frame_count = thermapp->data_done->header.frame_count;
+	if (thermapp->complete) {
+		ret = -1;
+	} else {
+		thermapp->serial_num = thermapp->data_done->header.serial_num_lo
+		                     | thermapp->data_done->header.serial_num_hi << 16;
+		thermapp->hardware_ver = thermapp->data_done->header.hardware_ver;
+		thermapp->firmware_ver = thermapp->data_done->header.firmware_ver;
+		thermapp->temperature = thermapp->data_done->header.temperature;
+		thermapp->frame_count = thermapp->data_done->header.frame_count;
 
-	memcpy(ImgData, thermapp->data_done->pixels_data, sizeof thermapp->data_done->pixels_data);
+		memcpy(ImgData, thermapp->data_done->pixels_data, sizeof thermapp->data_done->pixels_data);
+	}
 
 	pthread_mutex_unlock(&thermapp->mutex_getimage);
+
+	return ret;
 }
 
 uint32_t

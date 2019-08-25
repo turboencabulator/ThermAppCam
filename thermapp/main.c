@@ -30,41 +30,38 @@
 int format_properties(const unsigned int format,
                       const unsigned int width,
                       const unsigned int height,
-                      size_t *linewidth,
-                      size_t *framewidth)
+                      size_t *framesize,
+                      size_t *linewidth)
 {
-	unsigned int lw, fw;
+	unsigned int lw, fs;
 	switch (format) {
 	case V4L2_PIX_FMT_YUV420:
 	case V4L2_PIX_FMT_YVU420:
 		lw = width; /* ??? */
-		fw = ROUND_UP_4(width) * ROUND_UP_2(height);
-		fw += 2 * ((ROUND_UP_8(width) / 2) * (ROUND_UP_2(height) / 2));
+		fs = ROUND_UP_4(width) * ROUND_UP_2(height);
+		fs += 2 * ((ROUND_UP_8(width) / 2) * (ROUND_UP_2(height) / 2));
 		break;
 	case V4L2_PIX_FMT_UYVY:
 	case V4L2_PIX_FMT_Y41P:
 	case V4L2_PIX_FMT_YUYV:
 	case V4L2_PIX_FMT_YVYU:
 		lw = (ROUND_UP_2(width) * 2);
-		fw = lw * height;
+		fs = lw * height;
 		break;
 	case V4L2_PIX_FMT_Y10:
-		fprintf(stdout,"S/W\n");
-		lw = width;
-		fw = width * height;
-		break;
+	case V4L2_PIX_FMT_Y12:
 	case V4L2_PIX_FMT_Y16:
 	case V4L2_PIX_FMT_Y16_BE:
 		lw = 2 * width;
-		fw = 2 * width * height;
+		fs = lw * height;
 		break;
 	default:
 		return 0;
 	}
-	fprintf(stdout, "framewidth %d\n", fw);
+	fprintf(stdout, "framesize %d\n", fs);
 	fprintf(stdout, "linewidth %d\n", lw);
+	if (framesize) *framesize = fs;
 	if (linewidth) *linewidth = lw;
-	if (framewidth) *framewidth = fw;
 
 	return 1;
 }
@@ -83,6 +80,7 @@ int main(int argc, char *argv[])
 	}
 
 	int16_t frame[PIXELS_DATA_SIZE];
+	int ret;
 
 #ifndef FRAME_RAW
 	int flipv = 0;
@@ -98,7 +96,6 @@ int main(int argc, char *argv[])
 	long meancal = 0;
 	int image_cal[PIXELS_DATA_SIZE];
 	int deadpixel_map[PIXELS_DATA_SIZE] = { 0 };
-	int ret;
 
 	// Discard 1st frame, it usually has the header repeated twice
 	// and the data shifted into the pad by a corresponding amount.
@@ -160,8 +157,8 @@ int main(int argc, char *argv[])
 	size_t linewidth;
 	if (!format_properties(vid_format.fmt.pix.pixelformat,
 	                       vid_format.fmt.pix.width, vid_format.fmt.pix.height,
-	                       &linewidth,
-	                       &framesize)) {
+	                       &framesize,
+	                       &linewidth)) {
 		printf("unable to guess correct settings for format '%d'\n", FRAME_FORMAT);
 	}
 	vid_format.fmt.pix.sizeimage = framesize;
@@ -173,7 +170,7 @@ int main(int argc, char *argv[])
 
 	while (thermapp_getImage(therm, frame) == 0) {
 #ifndef FRAME_RAW
-		uint8_t img[165888];
+		uint8_t img[PIXELS_DATA_SIZE * 3 / 2];
 		int i;
 		int frameMax = ((frame[0] + pre_offset_cal - image_cal[0]) * gain_cal) + offset_cal;
 		int frameMin = ((frame[0] + pre_offset_cal - image_cal[0]) * gain_cal) + offset_cal;
@@ -202,10 +199,10 @@ int main(int argc, char *argv[])
 				img[PIXELS_DATA_SIZE - 1 - (PIXELS_DATA_SIZE - ((i/384)+1)*384 + i%384)] = x;
 			}
 		}
-		for (; i < 165888; i++) {
+		for (; i < sizeof img; i++) {
 			img[i] = 128;
 		}
-		write(fdwr, img, 165888);
+		write(fdwr, img, sizeof img);
 #else
 		write(fdwr, frame, sizeof frame);
 #endif

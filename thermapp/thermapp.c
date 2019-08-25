@@ -252,41 +252,7 @@ int thermapp_ParsingUsbPacket(ThermApp *thermapp, int16_t *ImgData)
 	thermapp->temperature = thermapp->therm_packet->header.temperature;
 	thermapp->frame_count = thermapp->therm_packet->header.frame_count;
 
-#if 0
-	int i;
-	for (i = 0; i < PIXELS_DATA_SIZE; i++) {
-		ImgData[i] = thermapp->therm_packet->pixels_data[i];
-		         //- thermapp->calibrate_pixels[0][i];
-	}
-#else
-
-#if 1
 	memcpy(ImgData, thermapp->therm_packet->pixels_data, PIXELS_DATA_SIZE*2);
-#else
-	// Debug some test
-	int i, i_src = 0;
-	for (i = 0; i < PIXELS_DATA_SIZE; i++) {
-		//if ((i == 8567))
-		//else
-		ImgData[i] = thermapp->therm_packet->pixels_data[i_src];
-		i_src++;
-	}
-	ImgData[8567] = (thermapp->therm_packet->pixels_data[8566]
-	               + thermapp->therm_packet->pixels_data[8568])/2;
-
-	i_src = 63360-384;
-	for (i = 63360; i < 63360+384; i++) {
-		ImgData[i] = thermapp->therm_packet->pixels_data[i_src];
-		i_src++;
-	}
-
-	i_src = 79488-384;
-	for (i = 79488; i < 79488+384; i++) {
-		ImgData[i] = thermapp->therm_packet->pixels_data[i_src];
-		i_src++;
-	}
-#endif
-#endif
 
 	return 1;
 }

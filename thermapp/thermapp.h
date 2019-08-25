@@ -124,7 +124,6 @@ typedef struct thermapp {
 	struct cfg_packet *cfg;
 	struct thermapp_packet *therm_packet;
 	int lost_packet;
-	//short **calibrate_pixels;
 } ThermApp;
 
 

@@ -79,23 +79,20 @@ typedef struct thermapp {
 	libusb_device_handle *dev;
 	struct libusb_transfer *transfer_in;
 	struct libusb_transfer *transfer_out;
-	unsigned char *transfer_buf;
 
 	pthread_t pthreadReadAsync;
-	pthread_t pthreadReadPipe;
-	pthread_mutex_t mutex_thermapp;
+	pthread_mutex_t mutex_getimage;
 	pthread_cond_t cond_getimage;
-	int fd_pipe[2];
 	int complete;
 
 	struct cfg_packet *cfg;
-	struct thermapp_packet *therm_packet;
+	struct thermapp_packet *data_in;
+	struct thermapp_packet *data_done;
 	uint32_t serial_num;
 	uint16_t hardware_ver;
 	uint16_t firmware_ver;
 	int16_t temperature;
 	uint16_t frame_count;
-	int lost_packet;
 } ThermApp;
 
 

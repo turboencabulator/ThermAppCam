@@ -43,8 +43,15 @@ thermapp_open(void)
 		return NULL;
 	}
 
-	thermapp->therm_packet = malloc(sizeof *thermapp->therm_packet);
-	if (!thermapp->therm_packet) {
+	thermapp->data_in = malloc(sizeof *thermapp->data_in);
+	if (!thermapp->data_in) {
+		perror("malloc");
+		thermapp_close(thermapp);
+		return NULL;
+	}
+
+	thermapp->data_done = malloc(sizeof *thermapp->data_done);
+	if (!thermapp->data_done) {
 		perror("malloc");
 		thermapp_close(thermapp);
 		return NULL;
@@ -165,16 +172,48 @@ transfer_cb_in(struct libusb_transfer *transfer)
 	ThermApp *thermapp = (ThermApp *)transfer->user_data;
 
 	if (transfer->status == LIBUSB_TRANSFER_COMPLETED) {
-		unsigned char *buf = transfer->buffer;
-		size_t len = transfer->actual_length;
-		while (len) {
-			ssize_t w_len = write(thermapp->fd_pipe[1], buf, len);
-			if (w_len < 0) {
-				perror("pipe write");
-				break;
+		// Device apparently only works with 512-byte chunks of data.
+		// Note the packet is padded to a multiple of 512 bytes.
+		if (transfer->actual_length % 512) {
+			fprintf(stderr, "discarding partial transfer of size %u\n", transfer->actual_length);
+			transfer->buffer = (unsigned char *)thermapp->data_in;
+			transfer->length = TRANSFER_SIZE;
+		} else if (transfer->actual_length) {
+			unsigned char *buf = (unsigned char *)thermapp->data_in;
+			size_t old = (unsigned char *)transfer->buffer - buf;
+			size_t len = old + transfer->actual_length;
+
+			if (!old) {
+				// Sync to start of packet.
+				// Look for preamble at start of 512-byte chunk.
+				while (len >= 512) {
+					if (memcmp(buf, thermapp->cfg, sizeof thermapp->cfg->preamble) == 0) {
+						break;
+					}
+					buf += 512;
+					len -= 512;
+				}
+				memmove(thermapp->data_in, buf, len);
 			}
-			buf += w_len;
-			len -= w_len;
+
+			if (len == sizeof *thermapp->data_in) {
+				// Frame complete.
+				pthread_mutex_lock(&thermapp->mutex_getimage);
+				struct thermapp_packet *tmp = thermapp->data_done;
+				thermapp->data_done = thermapp->data_in;
+				thermapp->data_in = tmp;
+				pthread_cond_broadcast(&thermapp->cond_getimage);
+				pthread_mutex_unlock(&thermapp->mutex_getimage);
+
+				transfer->buffer = (unsigned char *)thermapp->data_in;
+				len = 0;
+			}
+
+			transfer->buffer = (unsigned char *)thermapp->data_in + len;
+			transfer->length = TRANSFER_SIZE;
+			if (transfer->length > sizeof *thermapp->data_in - len) {
+				transfer->length = sizeof *thermapp->data_in - len;
+			}
 		}
 
 		int ret = libusb_submit_transfer(transfer);
@@ -184,8 +223,6 @@ transfer_cb_in(struct libusb_transfer *transfer)
 	} else if (transfer->status == LIBUSB_TRANSFER_ERROR
 	        || transfer->status == LIBUSB_TRANSFER_NO_DEVICE
 	        || transfer->status == LIBUSB_TRANSFER_CANCELLED) {
-		free(thermapp->transfer_buf);
-		thermapp->transfer_buf = NULL;
 		libusb_free_transfer(thermapp->transfer_in);
 		thermapp->transfer_in = NULL;
 
@@ -217,12 +254,11 @@ thermapp_read_async(ThermApp *thermapp)
 		thermapp->transfer_out = NULL;
 	}
 
-	thermapp->transfer_buf = malloc(TRANSFER_SIZE);
 	thermapp->transfer_in = libusb_alloc_transfer(0);
 	libusb_fill_bulk_transfer(thermapp->transfer_in,
 	                          thermapp->dev,
 	                          LIBUSB_ENDPOINT_IN | 1,
-	                          thermapp->transfer_buf,
+	                          (unsigned char *)thermapp->data_in,
 	                          TRANSFER_SIZE,
 	                          transfer_cb_in,
 	                          (void *)thermapp,
@@ -230,8 +266,6 @@ thermapp_read_async(ThermApp *thermapp)
 	ret = libusb_submit_transfer(thermapp->transfer_in);
 	if (ret) {
 		fprintf(stderr, "libusb_submit_transfer: %s\n", libusb_strerror(ret));
-		free(thermapp->transfer_buf);
-		thermapp->transfer_buf = NULL;
 		libusb_free_transfer(thermapp->transfer_in);
 		thermapp->transfer_in = NULL;
 	}
@@ -257,65 +291,6 @@ thermapp_ThreadReadAsync(void *ctx)
 	puts("thermapp_ThreadReadAsync run");
 	thermapp_read_async(thermapp);
 
-	puts("close(thermapp->fd_pipe[1])");
-	close(thermapp->fd_pipe[1]);
-	thermapp->fd_pipe[1] = 0;
-
-	return NULL;
-}
-
-static void *
-thermapp_ThreadPipeRead(void *ctx)
-{
-	ThermApp *thermapp = (ThermApp *)ctx;
-	struct cfg_packet header;
-	size_t len;
-	ssize_t ret;
-
-	puts("thermapp_ThreadPipeRead run");
-	while (!thermapp->complete) {
-
-		for (len = 0; len < sizeof header; ) {
-			if ((ret = read(thermapp->fd_pipe[0], (char *)&header + len, sizeof header - len)) <= 0) {
-				perror("pipe read");
-				break;
-			}
-			len += ret;
-			//fprintf(stderr, "ret: %d, len: %d\n", ret, len);
-		}
-
-		// FIXME:  Assumes frame start is always 64-byte aligned.
-		if (memcmp(&header, thermapp->cfg, sizeof header.preamble) == 0) {
-			//fprintf(stderr, "FRAME_START\n");
-			pthread_mutex_lock(&thermapp->mutex_thermapp);
-			thermapp->therm_packet->header = header;
-			for (len = sizeof header; len < sizeof *thermapp->therm_packet; ) {
-				ret = read(thermapp->fd_pipe[0], (char *)thermapp->therm_packet + len, sizeof *thermapp->therm_packet - len);
-				if (ret <= 0) {
-					perror("pipe read");
-					pthread_mutex_unlock(&thermapp->mutex_thermapp);
-					break;
-				}
-				len += ret;
-				//fprintf(stderr, "ret: %d, len: %d\n", ret, len);
-			}
-
-			if (1) { // FIXME:  Find a way to check the size.
-				//fprintf(stderr, "FRAME_OK\n");
-				pthread_cond_broadcast(&thermapp->cond_getimage);
-			} else {
-				fprintf(stderr, "lost frame\n");
-				thermapp->lost_packet++; //increment damaged frames counter
-			}
-
-			pthread_mutex_unlock(&thermapp->mutex_thermapp);
-		}
-	}
-
-	fprintf(stderr, "close(thermapp->fd_pipe[0]);\n");
-	close(thermapp->fd_pipe[0]);
-	thermapp->fd_pipe[0] = 0;
-
 	return NULL;
 }
 
@@ -326,22 +301,10 @@ thermapp_thread_create(ThermApp *thermapp)
 	int ret;
 
 	thermapp->cond_getimage = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
-	thermapp->mutex_thermapp = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+	thermapp->mutex_getimage = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 	thermapp->complete = 0;
 
-	ret = pipe(thermapp->fd_pipe);
-	if (ret) {
-		perror("pipe");
-		return -1;
-	}
-
 	ret = pthread_create(&thermapp->pthreadReadAsync, NULL, thermapp_ThreadReadAsync, (void *)thermapp);
-	if (ret) {
-		fprintf(stderr, "pthread_create: %s\n", strerror(ret));
-		return -1;
-	}
-
-	ret = pthread_create(&thermapp->pthreadReadPipe, NULL, thermapp_ThreadPipeRead, (void *)thermapp);
 	if (ret) {
 		fprintf(stderr, "pthread_create: %s\n", strerror(ret));
 		return -1;
@@ -360,12 +323,6 @@ thermapp_close(ThermApp *thermapp)
 
 	sleep(1);
 
-	if (thermapp->fd_pipe[0])
-		close(thermapp->fd_pipe[0]);
-
-	if (thermapp->fd_pipe[1])
-		close(thermapp->fd_pipe[1]);
-
 	if (thermapp->dev) {
 		libusb_release_interface(thermapp->dev, 0);
 		libusb_close(thermapp->dev);
@@ -375,7 +332,8 @@ thermapp_close(ThermApp *thermapp)
 		libusb_exit(thermapp->ctx);
 	}
 
-	free(thermapp->therm_packet);
+	free(thermapp->data_done);
+	free(thermapp->data_in);
 	free(thermapp->cfg);
 	free(thermapp);
 
@@ -386,19 +344,19 @@ thermapp_close(ThermApp *thermapp)
 void
 thermapp_getImage(ThermApp *thermapp, int16_t *ImgData)
 {
-	pthread_mutex_lock(&thermapp->mutex_thermapp);
-	pthread_cond_wait(&thermapp->cond_getimage, &thermapp->mutex_thermapp);
+	pthread_mutex_lock(&thermapp->mutex_getimage);
+	pthread_cond_wait(&thermapp->cond_getimage, &thermapp->mutex_getimage);
 
-	thermapp->serial_num = thermapp->therm_packet->header.serial_num_lo
-	                     | thermapp->therm_packet->header.serial_num_hi << 16;
-	thermapp->hardware_ver = thermapp->therm_packet->header.hardware_ver;
-	thermapp->firmware_ver = thermapp->therm_packet->header.firmware_ver;
-	thermapp->temperature = thermapp->therm_packet->header.temperature;
-	thermapp->frame_count = thermapp->therm_packet->header.frame_count;
+	thermapp->serial_num = thermapp->data_done->header.serial_num_lo
+	                     | thermapp->data_done->header.serial_num_hi << 16;
+	thermapp->hardware_ver = thermapp->data_done->header.hardware_ver;
+	thermapp->firmware_ver = thermapp->data_done->header.firmware_ver;
+	thermapp->temperature = thermapp->data_done->header.temperature;
+	thermapp->frame_count = thermapp->data_done->header.frame_count;
 
-	memcpy(ImgData, thermapp->therm_packet->pixels_data, PIXELS_DATA_SIZE*2);
+	memcpy(ImgData, thermapp->data_done->pixels_data, sizeof thermapp->data_done->pixels_data);
 
-	pthread_mutex_unlock(&thermapp->mutex_thermapp);
+	pthread_mutex_unlock(&thermapp->mutex_getimage);
 }
 
 uint32_t

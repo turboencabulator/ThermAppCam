@@ -155,23 +155,6 @@ thermapp_USB_checkForDevice(ThermApp *thermapp, int vendor, int product)
 	return 0;
 }
 
-static void THERMAPP_CALL
-thermapp_PipeWrite(unsigned char *buf, uint32_t len, void *ctx)
-{
-	//fprintf(stderr, "therm_callback\n");
-	unsigned int w_len;
-
-	if (len && ctx) {
-		if ((w_len = write(*(int *)ctx, buf, len)) <= 0) {
-			perror("pipe write");
-		}
-		//FIXME: w_len return can be smaller len
-		if (w_len < len) {
-			printf("pipe write len smaller. len: %d w_len: %d\n", len, w_len);
-		}
-	}
-}
-
 static int
 thermapp_cancel_async(ThermApp *thermapp)
 {
@@ -219,9 +202,17 @@ transfer_cb_in(struct libusb_transfer *transfer)
 
 	if (LIBUSB_TRANSFER_COMPLETED == transfer->status) {
 		//fprintf(stderr, "LIBUSB_TRANSFER_COMPLETED\n");
-		if (thermapp->cb)
-			thermapp->cb(transfer->buffer, transfer->actual_length, thermapp->cb_ctx);
-		//write(thermapp->fd_pipe[1], transfer->buffer, transfer->actual_length);// Write to fifo pipe
+		unsigned char *buf = transfer->buffer;
+		size_t len = transfer->actual_length;
+		while (len) {
+			ssize_t w_len = write(thermapp->fd_pipe[1], buf, len);
+			if (w_len < 0) {
+				perror("pipe write");
+				break;
+			}
+			buf += w_len;
+			len -= w_len;
+		}
 
 		libusb_submit_transfer(transfer); /* resubmit transfer */
 	} else if (LIBUSB_TRANSFER_ERROR == transfer->status
@@ -233,7 +224,7 @@ transfer_cb_in(struct libusb_transfer *transfer)
 }
 
 static int
-thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *ctx)
+thermapp_read_async(ThermApp *thermapp)
 {
 	fprintf(stderr, "thermapp_read_async\n");
 
@@ -249,9 +240,6 @@ thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *ctx)
 
 	thermapp->async_status = THERMAPP_RUNNING;
 	thermapp->async_cancel = 0;
-
-	thermapp->cb = cb;
-	thermapp->cb_ctx = ctx;
 
 	thermapp->transfer_out = libusb_alloc_transfer(0);
 	thermapp->transfer_in = libusb_alloc_transfer(0);
@@ -339,10 +327,10 @@ thermapp_read_async(ThermApp *thermapp, thermapp_read_async_cb_t cb, void *ctx)
 static void *
 thermapp_ThreadReadAsync(void *ctx)
 {
-	ThermApp *thermapp = ctx;
+	ThermApp *thermapp = (ThermApp *)ctx;
 
 	puts("thermapp_ThreadReadAsync run");
-	thermapp_read_async(thermapp, thermapp_PipeWrite, (void *)&thermapp->fd_pipe[1]);
+	thermapp_read_async(thermapp);
 
 	puts("close(thermapp->fd_pipe[1])");
 	close(thermapp->fd_pipe[1]);

@@ -25,13 +25,6 @@
 
 #include <libusb.h>
 
-#if defined(_WIN32) || defined(__CYGWIN__) || defined(_WIN32_WCE)
-#define THERMAPP_CALL WINAPI
-#else
-#define THERMAPP_CALL
-#endif
-
-
 #define VENDOR  (0x1772)
 #define PRODUCT (0x0002)
 
@@ -91,8 +84,6 @@ enum thermapp_async_status {
 	THERMAPP_RUNNING
 };
 
-typedef void (*thermapp_read_async_cb_t)(unsigned char *buf, uint32_t len, void *ctx);
-
 typedef struct thermapp {
 	pthread_t pthreadReadAsync;
 	pthread_t pthreadReadPipe;
@@ -115,8 +106,6 @@ typedef struct thermapp {
 
 	int fd_pipe[2];
 
-	thermapp_read_async_cb_t cb;
-	void *cb_ctx;
 	enum thermapp_async_status async_status;
 	int async_cancel;
 	int dev_lost;

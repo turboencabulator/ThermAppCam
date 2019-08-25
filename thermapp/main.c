@@ -192,7 +192,7 @@ int main(int argc, char *argv[])
 			if (deadpixel_map[i]) {
 				x = ((frame[i-1] + pre_offset_cal - image_cal[i-1]) * gain_cal) + offset_cal;
 			}
-			x = (((double)x - frameMin)/(frameMax - frameMin))*255;
+			x = (((double)x - frameMin)/(frameMax - frameMin)) * (235 - 16) + 16;
 			if (flipv) {
 				img[PIXELS_DATA_SIZE - ((i/384)+1)*384 + i%384] = x;
 			} else {

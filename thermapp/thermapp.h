@@ -78,12 +78,6 @@ struct thermapp_packet {
 	uint16_t data_pad[224];
 };
 
-enum thermapp_async_status {
-	THERMAPP_INACTIVE = 0,
-	THERMAPP_CANCELING,
-	THERMAPP_RUNNING
-};
-
 typedef struct thermapp {
 	libusb_context *ctx;
 	libusb_device_handle *dev;
@@ -96,9 +90,7 @@ typedef struct thermapp {
 	pthread_mutex_t mutex_thermapp;
 	pthread_cond_t cond_getimage;
 	int fd_pipe[2];
-	enum thermapp_async_status async_status;
-	int async_cancel;
-	int dev_lost;
+	int complete;
 
 	struct cfg_packet *cfg;
 	struct thermapp_packet *therm_packet;

@@ -196,7 +196,7 @@ int main(int argc, char *argv[])
 			if (flipv) {
 				img[PIXELS_DATA_SIZE - ((i/384)+1)*384 + i%384] = x;
 			} else {
-				img[PIXELS_DATA_SIZE - 1 - (PIXELS_DATA_SIZE - ((i/384)+1)*384 + i%384)] = x;
+				img[((i/384)+1)*384 - i%384 - 1] = x;
 			}
 		}
 		for (; i < sizeof img; i++) {

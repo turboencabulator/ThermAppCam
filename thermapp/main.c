@@ -68,19 +68,21 @@ int format_properties(const unsigned int format,
 
 int main(int argc, char *argv[])
 {
+	int16_t frame[PIXELS_DATA_SIZE];
+
 	ThermApp *therm = thermapp_open();
 	if (!therm) {
 		return -1;
 	}
 
+	// Discard 1st frame, it usually has the header repeated twice
+	// and the data shifted into the pad by a corresponding amount.
 	if (thermapp_usb_connect(therm)
-	 || thermapp_thread_create(therm)) {
+	 || thermapp_thread_create(therm)
+	 || thermapp_getImage(therm, frame)) {
 		thermapp_close(therm);
 		return -1;
 	}
-
-	int16_t frame[PIXELS_DATA_SIZE];
-	int ret;
 
 #ifndef FRAME_RAW
 	int flipv = 0;
@@ -97,19 +99,10 @@ int main(int argc, char *argv[])
 	int image_cal[PIXELS_DATA_SIZE];
 	int deadpixel_map[PIXELS_DATA_SIZE] = { 0 };
 
-	// Discard 1st frame, it usually has the header repeated twice
-	// and the data shifted into the pad by a corresponding amount.
-	ret = thermapp_getImage(therm, frame);
-	if (ret) {
-		thermapp_close(therm);
-		return -1;
-	}
-
 	memset(image_cal, 0, sizeof image_cal);
 	for (int i = 0; i < 50; i++) {
 		printf("Captured calibration frame %d/50. Keep lens covered.\n", i+1);
-		ret = thermapp_getImage(therm, frame);
-		if (ret) {
+		if (thermapp_getImage(therm, frame)) {
 			thermapp_close(therm);
 			return -1;
 		}
@@ -143,8 +136,7 @@ int main(int argc, char *argv[])
 	memset(&vid_format, 0, sizeof vid_format);
 	vid_format.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 
-	ret = ioctl(fdwr, VIDIOC_G_FMT, &vid_format);
-	if (ret)
+	if (ioctl(fdwr, VIDIOC_G_FMT, &vid_format))
 		perror("VIDIOC_G_FMT");
 
 	vid_format.fmt.pix.width = FRAME_WIDTH;
@@ -164,8 +156,7 @@ int main(int argc, char *argv[])
 	vid_format.fmt.pix.sizeimage = framesize;
 	vid_format.fmt.pix.bytesperline = linewidth;
 
-	ret = ioctl(fdwr, VIDIOC_S_FMT, &vid_format);
-	if (ret)
+	if (ioctl(fdwr, VIDIOC_S_FMT, &vid_format))
 		perror("VIDIOC_S_FMT");
 
 	while (thermapp_getImage(therm, frame) == 0) {

@@ -28,30 +28,25 @@
 
 
 ThermApp *
-thermapp_initUSB(void)
+thermapp_open(void)
 {
-	int ret;
-
-	ThermApp *thermapp = malloc(sizeof *thermapp);
+	ThermApp *thermapp = calloc(1, sizeof *thermapp);
 	if (!thermapp) {
-		perror("malloc");
+		perror("calloc");
 		return NULL;
 	}
 
-	memset(thermapp, 0, sizeof *thermapp);
-
-	thermapp->cfg = malloc(sizeof *thermapp->cfg);
+	thermapp->cfg = calloc(1, sizeof *thermapp->cfg);
 	if (!thermapp->cfg) {
-		perror("malloc");
-		free(thermapp);
+		perror("calloc");
+		thermapp_close(thermapp);
 		return NULL;
 	}
 
 	thermapp->therm_packet = malloc(sizeof *thermapp->therm_packet);
 	if (!thermapp->therm_packet) {
 		perror("malloc");
-		free(thermapp->cfg);
-		free(thermapp);
+		thermapp_close(thermapp);
 		return NULL;
 	}
 
@@ -62,17 +57,12 @@ thermapp_initUSB(void)
 	thermapp->cfg->preamble[2] = 0xa5a5;
 	thermapp->cfg->preamble[3] = 0xa5d5;
 	thermapp->cfg->modes = 0x0002; //test pattern low
-	thermapp->cfg->serial_num_lo = 0;
-	thermapp->cfg->serial_num_hi = 0;
-	thermapp->cfg->hardware_ver = 0;
-	thermapp->cfg->firmware_ver = 0;
 	thermapp->cfg->data_09 = 0x0120;//
 	thermapp->cfg->data_0a = 0x0180;//
 	thermapp->cfg->data_0b = 0x0120;//
 	thermapp->cfg->data_0c = 0x0180;// low
 	thermapp->cfg->data_0d = 0x0019;// high
 	thermapp->cfg->data_0e = 0x0000;//
-	thermapp->cfg->temperature = 0;//
 	thermapp->cfg->VoutA = 0x0795;
 	thermapp->cfg->data_11 = 0x0000;
 	thermapp->cfg->VoutC = 0x058f;
@@ -83,61 +73,38 @@ thermapp_initUSB(void)
 	thermapp->cfg->data_17 = 0x0000;//
 	thermapp->cfg->data_18 = 0x0998;//
 	thermapp->cfg->data_19 = 0x0040;//
-	thermapp->cfg->frame_count = 0;//
 	thermapp->cfg->data_1b = 0x0000;//
 	thermapp->cfg->data_1c = 0x0000;//low
 	thermapp->cfg->data_1d = 0x0000;//
 	thermapp->cfg->data_1e = 0x0000;//
 	thermapp->cfg->data_1f = 0x0fff;//
 
-	thermapp->async_status = THERMAPP_INACTIVE;
-
-	ret = libusb_init(&thermapp->ctx);
-	if (ret) {
-		fprintf(stderr, "libusb_init: %s\n", libusb_strerror(ret));
-		free(thermapp->therm_packet);
-		free(thermapp->cfg);
-		free(thermapp);
-		return NULL;
-	}
-
-	thermapp->cond_getimage = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
-	thermapp->mutex_thermapp = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
-
-	ret = pipe(thermapp->fd_pipe);
-	if (ret) {
-		perror("pipe");
-		free(thermapp->therm_packet);
-		free(thermapp->cfg);
-		free(thermapp);
-		return NULL;
-	}
-	//thermapp->lost_packet = 0;
-
 	return thermapp;
 }
 
 int
-thermapp_USB_checkForDevice(ThermApp *thermapp, int vendor, int product)
+thermapp_usb_connect(ThermApp *thermapp)
 {
 	int ret;
 
+	ret = libusb_init(&thermapp->ctx);
+	if (ret) {
+		fprintf(stderr, "libusb_init: %s\n", libusb_strerror(ret));
+		return -1;
+	}
+
 	///FIXME: For Debug use libusb_open_device_with_vid_pid
 	/// need to add search device
-	thermapp->dev = libusb_open_device_with_vid_pid(thermapp->ctx, vendor, product);
+	thermapp->dev = libusb_open_device_with_vid_pid(thermapp->ctx, VENDOR, PRODUCT);
 	if (!thermapp->dev) {
 		ret = LIBUSB_ERROR_NO_DEVICE;
 		fprintf(stderr, "libusb_open_device_with_vid_pid: %s\n", libusb_strerror(ret));
-		free(thermapp->cfg);
-		free(thermapp);
 		return -1;
 	}
 
 	ret = libusb_set_configuration(thermapp->dev, 1);
 	if (ret) {
 		fprintf(stderr, "libusb_set_configuration: %s\n", libusb_strerror(ret));
-		free(thermapp->cfg);
-		free(thermapp);
 		return -1;
 	}
 
@@ -147,8 +114,6 @@ thermapp_USB_checkForDevice(ThermApp *thermapp, int vendor, int product)
 	ret = libusb_claim_interface(thermapp->dev, 0);
 	if (ret) {
 		fprintf(stderr, "libusb_claim_interface: %s\n", libusb_strerror(ret));
-		free(thermapp->cfg);
-		free(thermapp);
 		return -1;
 	}
 
@@ -399,9 +364,71 @@ thermapp_ThreadPipeRead(void *ctx)
 	return NULL;
 }
 
+// Create read and write thread
+int
+thermapp_thread_create(ThermApp *thermapp)
+{
+	int ret;
+
+	thermapp->cond_getimage = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
+	thermapp->mutex_thermapp = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+
+	ret = pipe(thermapp->fd_pipe);
+	if (ret) {
+		perror("pipe");
+		return -1;
+	}
+
+	ret = pthread_create(&thermapp->pthreadReadAsync, NULL, thermapp_ThreadReadAsync, (void *)thermapp);
+	if (ret) {
+		fprintf(stderr, "pthread_create: %s\n", strerror(ret));
+		return -1;
+	}
+
+	ret = pthread_create(&thermapp->pthreadReadPipe, NULL, thermapp_ThreadPipeRead, (void *)thermapp);
+	if (ret) {
+		fprintf(stderr, "pthread_create: %s\n", strerror(ret));
+		return -1;
+	}
+
+	return 0;
+}
+
+int
+thermapp_close(ThermApp *thermapp)
+{
+	if (!thermapp)
+		return -1;
+
+	thermapp_cancel_async(thermapp);
+
+	sleep(1);
+
+	if (thermapp->fd_pipe[0])
+		close(thermapp->fd_pipe[0]);
+
+	if (thermapp->fd_pipe[1])
+		close(thermapp->fd_pipe[1]);
+
+	if (thermapp->dev) {
+		libusb_release_interface(thermapp->dev, 0);
+		libusb_close(thermapp->dev);
+	}
+
+	if (thermapp->ctx) {
+		libusb_exit(thermapp->ctx);
+	}
+
+	free(thermapp->therm_packet);
+	free(thermapp->cfg);
+	free(thermapp);
+
+	return 0;
+}
+
 // This function for getting frame pixel data
 void
-thermapp_GetImage(ThermApp *thermapp, int16_t *ImgData)
+thermapp_getImage(ThermApp *thermapp, int16_t *ImgData)
 {
 	pthread_mutex_lock(&thermapp->mutex_thermapp);
 	pthread_cond_wait(&thermapp->cond_getimage, &thermapp->mutex_thermapp);
@@ -417,42 +444,6 @@ thermapp_GetImage(ThermApp *thermapp, int16_t *ImgData)
 
 	pthread_mutex_unlock(&thermapp->mutex_thermapp);
 }
-
-
-// Create read and write thread
-int
-thermapp_FrameRequest_thread(ThermApp *thermapp)
-{
-	int ret;
-
-	ret = pthread_create(&thermapp->pthreadReadAsync, NULL, thermapp_ThreadReadAsync, (void *)thermapp);
-	if (ret) {
-		fprintf(stderr, "pthread_create: %s\n", strerror(ret));
-		return -1;
-	}
-
-	ret = pthread_create(&thermapp->pthreadReadPipe, NULL, thermapp_ThreadPipeRead, (void *)thermapp);
-	if (ret) {
-		fprintf(stderr, "pthread_create: %s\n", strerror(ret));
-		return -1;
-	}
-
-	return 1;
-}
-
-#if 0
-void
-thermapp_setGain(ThermApp *thermapp, unsigned short gain)
-{
-	thermapp->cfg->gain = gain;
-}
-
-unsigned short
-thermapp_getGain(ThermApp *thermapp)
-{
-	return thermapp->cfg->gain;
-}
-#endif
 
 uint32_t
 thermapp_getId(ThermApp *thermapp)
@@ -472,51 +463,4 @@ uint16_t
 thermapp_getFrameCount(ThermApp *thermapp)
 {
 	return thermapp->frame_count;
-}
-
-#if 0
-unsigned short
-thermapp_getDCoffset(ThermApp *thermapp)
-{
-	return thermapp->cfg->DCoffset;
-}
-
-void
-thermapp_setDCoffset(ThermApp *thermapp, unsigned short offset)
-{
-	thermapp->cfg->DCoffset = offset;
-}
-#endif
-
-int
-thermapp_Close(ThermApp *thermapp)
-{
-	if (!thermapp)
-		return -1;
-
-	thermapp_cancel_async(thermapp);
-
-	sleep(1);
-
-	if (thermapp->fd_pipe[0])
-		close(thermapp->fd_pipe[0]);
-	thermapp->fd_pipe[0] = 0;
-
-	if (thermapp->fd_pipe[1])
-		close(thermapp->fd_pipe[1]);
-	thermapp->fd_pipe[1] = 0;
-
-	free(thermapp->cfg);
-	thermapp->cfg = NULL;
-
-	libusb_release_interface(thermapp->dev, 0);
-
-	//libusb_close(thermapp->dev);
-	//printf("libusb_close\n");
-	libusb_exit(thermapp->ctx);
-
-	free(thermapp);
-	thermapp = NULL;
-
-	return 0;
 }

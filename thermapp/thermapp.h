@@ -85,60 +85,40 @@ enum thermapp_async_status {
 };
 
 typedef struct thermapp {
-	pthread_t pthreadReadAsync;
-	pthread_t pthreadReadPipe;
-
-	pthread_mutex_t mutex_thermapp;
-
-	pthread_cond_t cond_getimage;
-
-	uint32_t serial_num;
-	uint16_t hardware_ver;
-	uint16_t firmware_ver;
-	int16_t temperature;
-	uint16_t frame_count;
-
-	libusb_device_handle *dev;
 	libusb_context *ctx;
+	libusb_device_handle *dev;
 	struct libusb_transfer *transfer_in;
 	struct libusb_transfer *transfer_out;
 	unsigned char *transfer_buf;
 
+	pthread_t pthreadReadAsync;
+	pthread_t pthreadReadPipe;
+	pthread_mutex_t mutex_thermapp;
+	pthread_cond_t cond_getimage;
 	int fd_pipe[2];
-
 	enum thermapp_async_status async_status;
 	int async_cancel;
 	int dev_lost;
 
 	struct cfg_packet *cfg;
 	struct thermapp_packet *therm_packet;
+	uint32_t serial_num;
+	uint16_t hardware_ver;
+	uint16_t firmware_ver;
+	int16_t temperature;
+	uint16_t frame_count;
 	int lost_packet;
 } ThermApp;
 
 
-ThermApp *thermapp_initUSB(void);
+ThermApp *thermapp_open(void);
+int thermapp_usb_connect(ThermApp *thermapp);
+int thermapp_thread_create(ThermApp *thermapp);
+int thermapp_close(ThermApp *thermapp);
 
-int thermapp_USB_checkForDevice(ThermApp *thermapp, int vendor, int product);
-
-int thermapp_FrameRequest_thread(ThermApp *thermapp);
-
-void thermapp_GetImage(ThermApp *thermapp, int16_t *ImgData);
-
-//void thermapp_setGain(ThermApp *thermapp, unsigned short gain);
-
-//unsigned short thermapp_getGain(ThermApp *thermapp);
-
+void thermapp_getImage(ThermApp *thermapp, int16_t *ImgData);
 uint32_t thermapp_getId(ThermApp *thermapp);
-
 float thermapp_getTemperature(ThermApp *thermapp);
-
 uint16_t thermapp_getFrameCount(ThermApp *thermapp);
-
-//unsigned short thermapp_getDCoffset(ThermApp *thermapp);
-
-//void thermapp_setDCoffset(ThermApp *thermapp, unsigned short offset);
-
-int thermapp_Close(ThermApp *thermapp);
-
 
 #endif /* THERMAPP_H_ */

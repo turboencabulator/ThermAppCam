@@ -73,17 +73,16 @@ int format_properties(const unsigned int format,
 
 int main(int argc, char *argv[])
 {
-	ThermApp *therm = thermapp_initUSB();
+	ThermApp *therm = thermapp_open();
 	if (!therm) {
 		return -1;
 	}
 
-	/// Debug -> check for thermapp
-	if (thermapp_USB_checkForDevice(therm, VENDOR, PRODUCT) == -1) {
+	if (thermapp_usb_connect(therm) != 0
+	 || thermapp_thread_create(therm) != 0) {
+		thermapp_close(therm);
 		return -1;
 	}
-
-	thermapp_FrameRequest_thread(therm);
 
 	int16_t frame[PIXELS_DATA_SIZE];
 
@@ -101,8 +100,8 @@ int main(int argc, char *argv[])
 	long meancal = 0;
 	int image_cal[PIXELS_DATA_SIZE];
 	int deadpixel_map[PIXELS_DATA_SIZE] = { 0 };
-	thermapp_GetImage(therm, frame);
-	thermapp_GetImage(therm, frame);
+	thermapp_getImage(therm, frame);
+	thermapp_getImage(therm, frame);
 
 	for (int i = 0; i < PIXELS_DATA_SIZE; i++) {
 		image_cal[i] = frame[i];
@@ -110,7 +109,7 @@ int main(int argc, char *argv[])
 
 	for (int i = 0; i < 50; i++) {
 		printf("Captured calibration frame %d/50. Keep lens covered.\n", i+1);
-		thermapp_GetImage(therm, frame);
+		thermapp_getImage(therm, frame);
 
 		for (int j = 0; j < PIXELS_DATA_SIZE; j++) {
 			image_cal[j] += frame[j];
@@ -167,7 +166,7 @@ int main(int argc, char *argv[])
 		perror("VIDIOC_S_FMT");
 
 	while (1) {
-		thermapp_GetImage(therm, frame);
+		thermapp_getImage(therm, frame);
 
 #ifndef FRAME_RAW
 		uint8_t img[165888];
@@ -209,6 +208,6 @@ int main(int argc, char *argv[])
 	}
 
 	close(fdwr);
-	thermapp_Close(therm);
+	thermapp_close(therm);
 	return 0;
 }

@@ -29,6 +29,9 @@
 #define PRODUCT 0x0002
 
 #define TRANSFER_SIZE 8192
+#if (TRANSFER_SIZE % 512) || (TRANSFER_SIZE < 512)
+#error TRANSFER_SIZE must be a multiple of 512
+#endif
 
 #define FRAME_WIDTH  384
 #define FRAME_HEIGHT 288

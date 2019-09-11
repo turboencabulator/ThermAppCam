@@ -64,10 +64,10 @@ thermapp_open(void)
 	thermapp->cfg->preamble[2] = 0xa5a5;
 	thermapp->cfg->preamble[3] = 0xa5d5;
 	thermapp->cfg->modes = 0x0002; //test pattern low
-	thermapp->cfg->data_09 = 0x0120;
-	thermapp->cfg->data_0a = 0x0180;
-	thermapp->cfg->data_0b = 0x0120;
-	thermapp->cfg->data_0c = 0x0180;
+	thermapp->cfg->data_09 = FRAME_HEIGHT;
+	thermapp->cfg->data_0a = FRAME_WIDTH;
+	thermapp->cfg->data_0b = FRAME_HEIGHT;
+	thermapp->cfg->data_0c = FRAME_WIDTH;
 	thermapp->cfg->data_0d = 0x0019;
 	thermapp->cfg->data_0e = 0x0000;
 	thermapp->cfg->VoutA = 0x075c;

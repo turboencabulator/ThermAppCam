@@ -185,9 +185,9 @@ int main(int argc, char *argv[])
 			}
 			x = (((double)x - frameMin)/(frameMax - frameMin)) * (235 - 16) + 16;
 			if (flipv) {
-				img[PIXELS_DATA_SIZE - ((i/384)+1)*384 + i%384] = x;
+				img[PIXELS_DATA_SIZE - ((i/FRAME_WIDTH)+1)*FRAME_WIDTH + i%FRAME_WIDTH] = x;
 			} else {
-				img[((i/384)+1)*384 - i%384 - 1] = x;
+				img[((i/FRAME_WIDTH)+1)*FRAME_WIDTH - i%FRAME_WIDTH - 1] = x;
 			}
 		}
 		for (; i < sizeof img; i++) {

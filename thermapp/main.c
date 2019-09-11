@@ -56,14 +56,14 @@ int format_properties(const unsigned int format,
 		fs = lw * height;
 		break;
 	default:
-		return 0;
+		return -1;
 	}
 	fprintf(stdout, "framesize %d\n", fs);
 	fprintf(stdout, "linewidth %d\n", lw);
 	if (framesize) *framesize = fs;
 	if (linewidth) *linewidth = lw;
 
-	return 1;
+	return 0;
 }
 
 int main(int argc, char *argv[])
@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
 
 	ThermApp *therm = thermapp_open();
 	if (!therm) {
-		return -1;
+		return EXIT_FAILURE;
 	}
 
 	// Discard 1st frame, it usually has the header repeated twice
@@ -81,7 +81,7 @@ int main(int argc, char *argv[])
 	 || thermapp_thread_create(therm)
 	 || thermapp_getImage(therm, frame)) {
 		thermapp_close(therm);
-		return -1;
+		return EXIT_FAILURE;
 	}
 
 #ifndef FRAME_RAW
@@ -104,7 +104,7 @@ int main(int argc, char *argv[])
 		printf("Captured calibration frame %d/50. Keep lens covered.\n", i+1);
 		if (thermapp_getImage(therm, frame)) {
 			thermapp_close(therm);
-			return -1;
+			return EXIT_FAILURE;
 		}
 
 		for (int j = 0; j < PIXELS_DATA_SIZE; j++) {
@@ -147,10 +147,10 @@ int main(int argc, char *argv[])
 
 	size_t framesize;
 	size_t linewidth;
-	if (!format_properties(vid_format.fmt.pix.pixelformat,
-	                       vid_format.fmt.pix.width, vid_format.fmt.pix.height,
-	                       &framesize,
-	                       &linewidth)) {
+	if (format_properties(vid_format.fmt.pix.pixelformat,
+	                      vid_format.fmt.pix.width, vid_format.fmt.pix.height,
+	                      &framesize,
+	                      &linewidth)) {
 		printf("unable to guess correct settings for format '%d'\n", FRAME_FORMAT);
 	}
 	vid_format.fmt.pix.sizeimage = framesize;
@@ -201,5 +201,5 @@ int main(int argc, char *argv[])
 
 	close(fdwr);
 	thermapp_close(therm);
-	return 0;
+	return EXIT_SUCCESS;
 }

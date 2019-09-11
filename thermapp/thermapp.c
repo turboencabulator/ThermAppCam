@@ -34,28 +34,25 @@ thermapp_open(void)
 	ThermApp *thermapp = calloc(1, sizeof *thermapp);
 	if (!thermapp) {
 		perror("calloc");
-		return NULL;
+		goto err1;
 	}
 
 	thermapp->cfg = calloc(1, sizeof *thermapp->cfg);
 	if (!thermapp->cfg) {
 		perror("calloc");
-		thermapp_close(thermapp);
-		return NULL;
+		goto err2;
 	}
 
 	thermapp->data_in = malloc(ROUND_UP_512(sizeof *thermapp->data_in));
 	if (!thermapp->data_in) {
 		perror("malloc");
-		thermapp_close(thermapp);
-		return NULL;
+		goto err2;
 	}
 
 	thermapp->data_done = malloc(ROUND_UP_512(sizeof *thermapp->data_done));
 	if (!thermapp->data_done) {
 		perror("malloc");
-		thermapp_close(thermapp);
-		return NULL;
+		goto err2;
 	}
 
 	//Initialize data struct
@@ -88,6 +85,11 @@ thermapp_open(void)
 	thermapp->cfg->data_1f = 0x0fff;
 
 	return thermapp;
+
+err2:
+	thermapp_close(thermapp);
+err1:
+	return NULL;
 }
 
 int

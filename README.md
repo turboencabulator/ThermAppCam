@@ -6,10 +6,10 @@ This fork is designed to allow the Therm-App thermal imaging camera for use as a
 * Automatic dead pixel detection during the NUC process and correction
 * Image range scaling
 * YUV (V4L2_PIX_FMT_YUV420) instead of Grey (V4L2_PIX_FMT_GREY) output for better compatibility with security software (eg. motion or mjpgstreamer)
-* Image is the right way round by default (instead of mirrored)
-* Image can be flipped (arg = 1 for flip, = 0 for normal)
+* Image is the right way round by default (instead of horizontally flipped)
+* Image can be vertically flipped (arg = 1 for vflip, = 0 for normal)
 
-## Requirements
+## Dependencies
 * [v4l2loopback](https://github.com/umlaeute/v4l2loopback)
 * [libusb](https://libusb.info/) >= 1.0
 

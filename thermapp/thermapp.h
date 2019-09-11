@@ -74,7 +74,6 @@ struct cfg_packet {
 struct thermapp_packet {
 	struct cfg_packet header;
 	int16_t pixels_data[PIXELS_DATA_SIZE];
-	uint16_t data_pad[224];
 };
 
 typedef struct thermapp {

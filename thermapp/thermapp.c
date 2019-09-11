@@ -26,6 +26,7 @@
 
 #include "thermapp.h"
 
+#define ROUND_UP_512(num) (((num)+511)&~511)
 
 ThermApp *
 thermapp_open(void)
@@ -43,14 +44,14 @@ thermapp_open(void)
 		return NULL;
 	}
 
-	thermapp->data_in = malloc(sizeof *thermapp->data_in);
+	thermapp->data_in = malloc(ROUND_UP_512(sizeof *thermapp->data_in));
 	if (!thermapp->data_in) {
 		perror("malloc");
 		thermapp_close(thermapp);
 		return NULL;
 	}
 
-	thermapp->data_done = malloc(sizeof *thermapp->data_done);
+	thermapp->data_done = malloc(ROUND_UP_512(sizeof *thermapp->data_done));
 	if (!thermapp->data_done) {
 		perror("malloc");
 		thermapp_close(thermapp);
@@ -206,7 +207,7 @@ transfer_cb_in(struct libusb_transfer *transfer)
 				memmove(thermapp->data_in, buf, len);
 			}
 
-			if (len == sizeof *thermapp->data_in) {
+			if (len == ROUND_UP_512(sizeof *thermapp->data_in)) {
 				// Frame complete.
 				pthread_mutex_lock(&thermapp->mutex_getimage);
 				struct thermapp_packet *tmp = thermapp->data_done;
@@ -221,8 +222,8 @@ transfer_cb_in(struct libusb_transfer *transfer)
 
 			transfer->buffer = (unsigned char *)thermapp->data_in + len;
 			transfer->length = TRANSFER_SIZE;
-			if (transfer->length > sizeof *thermapp->data_in - len) {
-				transfer->length = sizeof *thermapp->data_in - len;
+			if (transfer->length > ROUND_UP_512(sizeof *thermapp->data_in) - len) {
+				transfer->length = ROUND_UP_512(sizeof *thermapp->data_in) - len;
 			}
 		}
 

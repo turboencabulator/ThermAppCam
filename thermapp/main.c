@@ -102,7 +102,6 @@ int main(int argc, char *argv[])
 	for (int i = 0; i < 50; i++) {
 		printf("Captured calibration frame %d/50. Keep lens covered.\n", i+1);
 		if (thermapp_getImage(therm, frame)) {
-			ret = EXIT_FAILURE;
 			goto done2;
 		}
 

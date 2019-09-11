@@ -245,9 +245,6 @@ static void *
 thermapp_read_async(void *ctx)
 {
 	ThermApp *thermapp = (ThermApp *)ctx;
-
-	fprintf(stderr, "thermapp_read_async\n");
-
 	int ret;
 
 	thermapp->transfer_out = libusb_alloc_transfer(0);

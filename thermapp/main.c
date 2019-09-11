@@ -58,8 +58,6 @@ int format_properties(const unsigned int format,
 	default:
 		return -1;
 	}
-	fprintf(stdout, "framesize %d\n", fs);
-	fprintf(stdout, "linewidth %d\n", lw);
 	if (framesize) *framesize = fs;
 	if (linewidth) *linewidth = lw;
 

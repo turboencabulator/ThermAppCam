@@ -83,6 +83,10 @@ int main(int argc, char *argv[])
 		goto done2;
 	}
 
+	printf("Serial number: %d\n", thermapp_getSerialNumber(therm));
+	printf("Hardware version: %d\n", thermapp_getHardwareVersion(therm));
+	printf("Firmware version: %d\n", thermapp_getFirmwareVersion(therm));
+
 #ifndef FRAME_RAW
 	int flipv = 0;
 	if (argc >= 2) {
@@ -90,7 +94,6 @@ int main(int argc, char *argv[])
 	}
 
 	// get cal
-	printf("Calibrating... cover the lens!\n");
 	double pre_offset_cal = 0;
 	double gain_cal = 1;
 	double offset_cal = 0;
@@ -99,16 +102,20 @@ int main(int argc, char *argv[])
 	int deadpixel_map[PIXELS_DATA_SIZE] = { 0 };
 
 	memset(image_cal, 0, sizeof image_cal);
+	printf("Calibrating... cover the lens!\n");
 	for (int i = 0; i < 50; i++) {
-		printf("Captured calibration frame %d/50. Keep lens covered.\n", i+1);
 		if (thermapp_getImage(therm, frame)) {
 			goto done2;
 		}
+
+		printf("\rCaptured calibration frame %d/50. Keep lens covered.", i+1);
+		fflush(stdout);
 
 		for (int j = 0; j < PIXELS_DATA_SIZE; j++) {
 			image_cal[j] += frame[j];
 		}
 	}
+	printf("\nCalibration finished\n");
 
 	for (int i = 0; i < PIXELS_DATA_SIZE; i++) {
 		image_cal[i] /= 50;
@@ -123,7 +130,6 @@ int main(int argc, char *argv[])
 		}
 	}
 	// end of get cal
-	printf("Calibration finished\n");
 #endif
 
 	struct v4l2_format vid_format;

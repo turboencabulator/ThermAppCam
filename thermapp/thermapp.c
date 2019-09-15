@@ -373,9 +373,21 @@ thermapp_getImage(ThermApp *thermapp, int16_t *ImgData)
 }
 
 uint32_t
-thermapp_getId(ThermApp *thermapp)
+thermapp_getSerialNumber(ThermApp *thermapp)
 {
 	return thermapp->serial_num;
+}
+
+uint16_t
+thermapp_getHardwareVersion(ThermApp *thermapp)
+{
+	return thermapp->hardware_ver;
+}
+
+uint16_t
+thermapp_getFirmwareVersion(ThermApp *thermapp)
+{
+	return thermapp->firmware_ver;
 }
 
 //We don't know offset and quant value for temperature.

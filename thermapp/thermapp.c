@@ -26,6 +26,7 @@
 
 #include "thermapp.h"
 
+#define ROUND_UP_512(num) (((num)+511)&~511)
 
 ThermApp *
 thermapp_open(void)
@@ -33,28 +34,25 @@ thermapp_open(void)
 	ThermApp *thermapp = calloc(1, sizeof *thermapp);
 	if (!thermapp) {
 		perror("calloc");
-		return NULL;
+		goto err1;
 	}
 
 	thermapp->cfg = calloc(1, sizeof *thermapp->cfg);
 	if (!thermapp->cfg) {
 		perror("calloc");
-		thermapp_close(thermapp);
-		return NULL;
+		goto err2;
 	}
 
-	thermapp->data_in = malloc(sizeof *thermapp->data_in);
+	thermapp->data_in = malloc(ROUND_UP_512(sizeof *thermapp->data_in));
 	if (!thermapp->data_in) {
 		perror("malloc");
-		thermapp_close(thermapp);
-		return NULL;
+		goto err2;
 	}
 
-	thermapp->data_done = malloc(sizeof *thermapp->data_done);
+	thermapp->data_done = malloc(ROUND_UP_512(sizeof *thermapp->data_done));
 	if (!thermapp->data_done) {
 		perror("malloc");
-		thermapp_close(thermapp);
-		return NULL;
+		goto err2;
 	}
 
 	//Initialize data struct
@@ -64,10 +62,10 @@ thermapp_open(void)
 	thermapp->cfg->preamble[2] = 0xa5a5;
 	thermapp->cfg->preamble[3] = 0xa5d5;
 	thermapp->cfg->modes = 0x0002; //test pattern low
-	thermapp->cfg->data_09 = 0x0120;
-	thermapp->cfg->data_0a = 0x0180;
-	thermapp->cfg->data_0b = 0x0120;
-	thermapp->cfg->data_0c = 0x0180;
+	thermapp->cfg->data_09 = FRAME_HEIGHT;
+	thermapp->cfg->data_0a = FRAME_WIDTH;
+	thermapp->cfg->data_0b = FRAME_HEIGHT;
+	thermapp->cfg->data_0c = FRAME_WIDTH;
 	thermapp->cfg->data_0d = 0x0019;
 	thermapp->cfg->data_0e = 0x0000;
 	thermapp->cfg->VoutA = 0x075c;
@@ -87,6 +85,11 @@ thermapp_open(void)
 	thermapp->cfg->data_1f = 0x0fff;
 
 	return thermapp;
+
+err2:
+	thermapp_close(thermapp);
+err1:
+	return NULL;
 }
 
 int
@@ -206,7 +209,7 @@ transfer_cb_in(struct libusb_transfer *transfer)
 				memmove(thermapp->data_in, buf, len);
 			}
 
-			if (len == sizeof *thermapp->data_in) {
+			if (len == ROUND_UP_512(sizeof *thermapp->data_in)) {
 				// Frame complete.
 				pthread_mutex_lock(&thermapp->mutex_getimage);
 				struct thermapp_packet *tmp = thermapp->data_done;
@@ -221,8 +224,8 @@ transfer_cb_in(struct libusb_transfer *transfer)
 
 			transfer->buffer = (unsigned char *)thermapp->data_in + len;
 			transfer->length = TRANSFER_SIZE;
-			if (transfer->length > sizeof *thermapp->data_in - len) {
-				transfer->length = sizeof *thermapp->data_in - len;
+			if (transfer->length > ROUND_UP_512(sizeof *thermapp->data_in) - len) {
+				transfer->length = ROUND_UP_512(sizeof *thermapp->data_in) - len;
 			}
 		}
 
@@ -244,9 +247,6 @@ static void *
 thermapp_read_async(void *ctx)
 {
 	ThermApp *thermapp = (ThermApp *)ctx;
-
-	fprintf(stderr, "thermapp_read_async\n");
-
 	int ret;
 
 	thermapp->transfer_out = libusb_alloc_transfer(0);
@@ -373,9 +373,21 @@ thermapp_getImage(ThermApp *thermapp, int16_t *ImgData)
 }
 
 uint32_t
-thermapp_getId(ThermApp *thermapp)
+thermapp_getSerialNumber(ThermApp *thermapp)
 {
 	return thermapp->serial_num;
+}
+
+uint16_t
+thermapp_getHardwareVersion(ThermApp *thermapp)
+{
+	return thermapp->hardware_ver;
+}
+
+uint16_t
+thermapp_getFirmwareVersion(ThermApp *thermapp)
+{
+	return thermapp->firmware_ver;
 }
 
 //We don't know offset and quant value for temperature.

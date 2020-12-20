@@ -9,7 +9,6 @@
 #include <string.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <assert.h>
 
 #define VIDEO_DEVICE "/dev/video0"
 #undef FRAME_RAW
@@ -56,23 +55,23 @@ int format_properties(const unsigned int format,
 		fs = lw * height;
 		break;
 	default:
-		return 0;
+		return -1;
 	}
-	fprintf(stdout, "framesize %d\n", fs);
-	fprintf(stdout, "linewidth %d\n", lw);
 	if (framesize) *framesize = fs;
 	if (linewidth) *linewidth = lw;
 
-	return 1;
+	return 0;
 }
 
 int main(int argc, char *argv[])
 {
 	int16_t frame[PIXELS_DATA_SIZE];
+	int ret = EXIT_SUCCESS;
 
 	ThermApp *therm = thermapp_open();
 	if (!therm) {
-		return -1;
+		ret = EXIT_FAILURE;
+		goto done1;
 	}
 
 	// Discard 1st frame, it usually has the header repeated twice
@@ -80,9 +79,13 @@ int main(int argc, char *argv[])
 	if (thermapp_usb_connect(therm)
 	 || thermapp_thread_create(therm)
 	 || thermapp_getImage(therm, frame)) {
-		thermapp_close(therm);
-		return -1;
+		ret = EXIT_FAILURE;
+		goto done2;
 	}
+
+	printf("Serial number: %d\n", thermapp_getSerialNumber(therm));
+	printf("Hardware version: %d\n", thermapp_getHardwareVersion(therm));
+	printf("Firmware version: %d\n", thermapp_getFirmwareVersion(therm));
 
 #ifndef FRAME_RAW
 	int flipv = 0;
@@ -91,7 +94,6 @@ int main(int argc, char *argv[])
 	}
 
 	// get cal
-	printf("Calibrating... cover the lens!\n");
 	double pre_offset_cal = 0;
 	double gain_cal = 1;
 	double offset_cal = 0;
@@ -100,17 +102,20 @@ int main(int argc, char *argv[])
 	int deadpixel_map[PIXELS_DATA_SIZE] = { 0 };
 
 	memset(image_cal, 0, sizeof image_cal);
+	printf("Calibrating... cover the lens!\n");
 	for (int i = 0; i < 50; i++) {
-		printf("Captured calibration frame %d/50. Keep lens covered.\n", i+1);
 		if (thermapp_getImage(therm, frame)) {
-			thermapp_close(therm);
-			return -1;
+			goto done2;
 		}
+
+		printf("\rCaptured calibration frame %d/50. Keep lens covered.", i+1);
+		fflush(stdout);
 
 		for (int j = 0; j < PIXELS_DATA_SIZE; j++) {
 			image_cal[j] += frame[j];
 		}
 	}
+	printf("\nCalibration finished\n");
 
 	for (int i = 0; i < PIXELS_DATA_SIZE; i++) {
 		image_cal[i] /= 50;
@@ -125,19 +130,25 @@ int main(int argc, char *argv[])
 		}
 	}
 	// end of get cal
-	printf("Calibration finished\n");
 #endif
 
 	struct v4l2_format vid_format;
 
 	int fdwr = open(VIDEO_DEVICE, O_WRONLY);
-	assert(fdwr >= 0);
+	if (fdwr < 0) {
+		perror("open");
+		ret = EXIT_FAILURE;
+		goto done2;
+	}
 
 	memset(&vid_format, 0, sizeof vid_format);
 	vid_format.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 
-	if (ioctl(fdwr, VIDIOC_G_FMT, &vid_format))
+	if (ioctl(fdwr, VIDIOC_G_FMT, &vid_format)) {
 		perror("VIDIOC_G_FMT");
+		ret = EXIT_FAILURE;
+		goto done3;
+	}
 
 	vid_format.fmt.pix.width = FRAME_WIDTH;
 	vid_format.fmt.pix.height = FRAME_HEIGHT;
@@ -147,17 +158,22 @@ int main(int argc, char *argv[])
 
 	size_t framesize;
 	size_t linewidth;
-	if (!format_properties(vid_format.fmt.pix.pixelformat,
-	                       vid_format.fmt.pix.width, vid_format.fmt.pix.height,
-	                       &framesize,
-	                       &linewidth)) {
-		printf("unable to guess correct settings for format '%d'\n", FRAME_FORMAT);
+	if (format_properties(vid_format.fmt.pix.pixelformat,
+	                      vid_format.fmt.pix.width, vid_format.fmt.pix.height,
+	                      &framesize,
+	                      &linewidth)) {
+		fprintf(stderr, "unable to guess correct settings for format '%d'\n", FRAME_FORMAT);
+		ret = EXIT_FAILURE;
+		goto done3;
 	}
 	vid_format.fmt.pix.sizeimage = framesize;
 	vid_format.fmt.pix.bytesperline = linewidth;
 
-	if (ioctl(fdwr, VIDIOC_S_FMT, &vid_format))
+	if (ioctl(fdwr, VIDIOC_S_FMT, &vid_format)) {
 		perror("VIDIOC_S_FMT");
+		ret = EXIT_FAILURE;
+		goto done3;
+	}
 
 	while (thermapp_getImage(therm, frame) == 0) {
 #ifndef FRAME_RAW
@@ -185,9 +201,9 @@ int main(int argc, char *argv[])
 			}
 			x = (((double)x - frameMin)/(frameMax - frameMin)) * (235 - 16) + 16;
 			if (flipv) {
-				img[PIXELS_DATA_SIZE - ((i/384)+1)*384 + i%384] = x;
+				img[PIXELS_DATA_SIZE - ((i/FRAME_WIDTH)+1)*FRAME_WIDTH + i%FRAME_WIDTH] = x;
 			} else {
-				img[((i/384)+1)*384 - i%384 - 1] = x;
+				img[((i/FRAME_WIDTH)+1)*FRAME_WIDTH - i%FRAME_WIDTH - 1] = x;
 			}
 		}
 		for (; i < sizeof img; i++) {
@@ -199,7 +215,10 @@ int main(int argc, char *argv[])
 #endif
 	}
 
+done3:
 	close(fdwr);
+done2:
 	thermapp_close(therm);
-	return 0;
+done1:
+	return ret;
 }

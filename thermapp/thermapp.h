@@ -74,7 +74,6 @@ struct cfg_packet {
 struct thermapp_packet {
 	struct cfg_packet header;
 	int16_t pixels_data[PIXELS_DATA_SIZE];
-	uint16_t data_pad[224];
 };
 
 typedef struct thermapp {
@@ -106,7 +105,9 @@ int thermapp_thread_create(ThermApp *thermapp);
 int thermapp_close(ThermApp *thermapp);
 
 int thermapp_getImage(ThermApp *thermapp, int16_t *ImgData);
-uint32_t thermapp_getId(ThermApp *thermapp);
+uint32_t thermapp_getSerialNumber(ThermApp *thermapp);
+uint16_t thermapp_getHardwareVersion(ThermApp *thermapp);
+uint16_t thermapp_getFirmwareVersion(ThermApp *thermapp);
 float thermapp_getTemperature(ThermApp *thermapp);
 uint16_t thermapp_getFrameCount(ThermApp *thermapp);
 

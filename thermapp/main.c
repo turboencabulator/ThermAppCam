@@ -70,8 +70,9 @@ int main(int argc, char *argv[])
 
 	int fliph = 1;
 	int flipv = 0;
+	const char *videodev = VIDEO_DEVICE;
 	int opt;
-	while ((opt = getopt(argc, argv, "HVh")) != -1) {
+	while ((opt = getopt(argc, argv, "HVd:h")) != -1) {
 		switch (opt) {
 		case 'H':
 			fliph = 0;
@@ -79,10 +80,14 @@ int main(int argc, char *argv[])
 		case 'V':
 			flipv = 1;
 			break;
+		case 'd':
+			videodev = optarg;
+			break;
 		case 'h':
 			printf("Usage: %s [options]\n", argv[0]);
 			printf("  -H            Flip the image horizontally\n");
 			printf("  -V            Flip the image vertically\n");
+			printf("  -d device     Write frames to selected device [default: " VIDEO_DEVICE "]\n");
 			printf("  -h            Show this help message and exit\n");
 			goto done1;
 		default:
@@ -152,7 +157,7 @@ int main(int argc, char *argv[])
 
 	struct v4l2_format vid_format;
 
-	int fdwr = open(VIDEO_DEVICE, O_WRONLY);
+	int fdwr = open(videodev, O_WRONLY);
 	if (fdwr < 0) {
 		perror("open");
 		ret = EXIT_FAILURE;

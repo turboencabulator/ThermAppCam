@@ -26,12 +26,14 @@ First make sure the v4l2loopback kernel module is loaded:
 sudo modprobe v4l2loopback
 ```
 
+Loading the module will create a video device node such as `/dev/video0`.  The number may vary (particularly if you have other video cameras present), see v4l2loopback's documentation for details.
+
 Plug in the camera.  Keep the lens covered as you start the software:
 ```
 sudo thermapp [options]
 ```
 
-The software will read 50 frames for its automatic calibration.  After that is complete, you may remove the lens cap and open `/dev/video0` in your video player of choice.
+The software will read 50 frames for its automatic calibration.  After that is complete, you may remove the lens cap and open the video device in your player of choice.
 
 To quit, either press Ctrl+C or unplug the camera.
 
@@ -41,6 +43,8 @@ To quit, either press Ctrl+C or unplug the camera.
 <dd>Flip the image horizontally.</dd>
 <dt><code>-V</code></dt>
 <dd>Flip the image vertically.</dd>
+<dt><code>-d device</code></dt>
+<dd>Send video to a particular video device.  The default device is <code>/dev/video0</code>.</dd>
 <dt><code>-h</code></dt>
 <dd>Show the help message and exit.</dd>
 </dl>

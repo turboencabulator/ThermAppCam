@@ -16,8 +16,8 @@
 * along with this program. If not, see <http://www.gnu.org/licenses/>.     *
 ***************************************************************************/
 
-#ifndef THERMAPP_H_
-#define THERMAPP_H_
+#ifndef THERMAPP_H
+#define THERMAPP_H
 
 #include <libusb.h>
 #include <pthread.h>
@@ -26,18 +26,18 @@
 #define VENDOR  0x1772
 #define PRODUCT 0x0002
 
+#define FRAME_WIDTH  384
+#define FRAME_HEIGHT 288
+#define FRAME_PIXELS (FRAME_WIDTH * FRAME_HEIGHT)
+
 #define TRANSFER_SIZE 8192
 #if (TRANSFER_SIZE % 512) || (TRANSFER_SIZE < 512)
 #error TRANSFER_SIZE must be a multiple of 512
 #endif
 
-#define FRAME_WIDTH  384
-#define FRAME_HEIGHT 288
-#define PIXELS_DATA_SIZE (FRAME_WIDTH * FRAME_HEIGHT)
-
 // AD5628 DAC in Therm App is for generating control voltage
 // VREF = 2.5 volts 11 Bit
-struct cfg_packet {
+struct thermapp_cfg {
 	uint16_t preamble[4];
 	uint16_t modes;// 0xXXXM  Modes set last nibble
 	uint16_t serial_num_lo;
@@ -69,34 +69,33 @@ struct cfg_packet {
 	uint16_t data_1f;
 };
 
-struct thermapp_packet {
-	struct cfg_packet header;
-	int16_t pixels_data[PIXELS_DATA_SIZE];
+struct thermapp_frame {
+	struct thermapp_cfg header;
+	int16_t pixels[FRAME_PIXELS];
 };
 
-typedef struct thermapp {
+struct thermapp_usb_dev {
 	libusb_context *ctx;
-	libusb_device_handle *dev;
+	libusb_device_handle *usb;
 	struct libusb_transfer *transfer_in;
 	struct libusb_transfer *transfer_out;
 
-	int started_read_async;
+	int read_async_started;
+	int read_async_completed;
 	pthread_t pthread_read_async;
-	pthread_mutex_t mutex_getimage;
-	pthread_cond_t cond_getimage;
-	int complete;
+	pthread_mutex_t mutex_frame_swap;
+	pthread_cond_t cond_frame_ready;
 
-	struct cfg_packet *cfg;
-	struct thermapp_packet *data_in;
-	struct thermapp_packet *data_done;
-} ThermApp;
+	struct thermapp_cfg *cfg;
+	struct thermapp_frame *frame_in;
+	struct thermapp_frame *frame_done;
+};
 
 
-ThermApp *thermapp_open(void);
-int thermapp_usb_connect(ThermApp *thermapp);
-int thermapp_thread_create(ThermApp *thermapp);
-int thermapp_close(ThermApp *thermapp);
+struct thermapp_usb_dev *thermapp_usb_open(void);
+int thermapp_usb_connect(struct thermapp_usb_dev *);
+int thermapp_usb_thread_create(struct thermapp_usb_dev *);
+int thermapp_usb_frame_read(struct thermapp_usb_dev *, struct thermapp_frame *);
+int thermapp_usb_close(struct thermapp_usb_dev *);
 
-int thermapp_getImage(ThermApp *thermapp, struct thermapp_packet *frame);
-
-#endif /* THERMAPP_H_ */
+#endif /* THERMAPP_H */

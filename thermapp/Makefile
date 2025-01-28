@@ -6,9 +6,10 @@ prefix = /usr/local
 exec_prefix = $(prefix)
 bindir = $(exec_prefix)/bin
 
-thermapp: main.o thermapp.o
+thermapp: main.o usb.o
+	$(LINK.o) $^ $(LOADLIBES) $(LDLIBS) -o $@
 main.o: main.c thermapp.h
-thermapp.o: thermapp.c thermapp.h
+usb.o: usb.c thermapp.h
 
 .PHONY: install
 install: thermapp
@@ -17,4 +18,4 @@ install: thermapp
 .PHONY: clean
 clean:
 	rm -f thermapp
-	rm -f main.o thermapp.o
+	rm -f main.o usb.o

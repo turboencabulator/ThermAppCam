@@ -65,7 +65,6 @@ int format_properties(const unsigned int format,
 
 int main(int argc, char *argv[])
 {
-	int16_t frame[PIXELS_DATA_SIZE];
 	int ret = EXIT_SUCCESS;
 
 	int fliph = 1;
@@ -104,9 +103,10 @@ int main(int argc, char *argv[])
 
 	// Discard 1st frame, it usually has the header repeated twice
 	// and the data shifted into the pad by a corresponding amount.
+	struct thermapp_packet frame;
 	if (thermapp_usb_connect(therm)
 	 || thermapp_thread_create(therm)
-	 || thermapp_getImage(therm, frame)) {
+	 || thermapp_getImage(therm, &frame)) {
 		ret = EXIT_FAILURE;
 		goto done2;
 	}
@@ -127,7 +127,7 @@ int main(int argc, char *argv[])
 	memset(image_cal, 0, sizeof image_cal);
 	printf("Calibrating... cover the lens!\n");
 	for (int i = 0; i < 50; i++) {
-		if (thermapp_getImage(therm, frame)) {
+		if (thermapp_getImage(therm, &frame)) {
 			goto done2;
 		}
 
@@ -135,7 +135,7 @@ int main(int argc, char *argv[])
 		fflush(stdout);
 
 		for (int j = 0; j < PIXELS_DATA_SIZE; j++) {
-			image_cal[j] += frame[j];
+			image_cal[j] += frame.pixels_data[j];
 		}
 	}
 	printf("\nCalibration finished\n");
@@ -198,16 +198,16 @@ int main(int argc, char *argv[])
 		goto done3;
 	}
 
-	while (thermapp_getImage(therm, frame) == 0) {
+	while (thermapp_getImage(therm, &frame) == 0) {
 #ifndef FRAME_RAW
 		uint8_t img[PIXELS_DATA_SIZE * 3 / 2];
 		int i;
-		int frameMax = ((frame[0] + pre_offset_cal - image_cal[0]) * gain_cal) + offset_cal;
-		int frameMin = ((frame[0] + pre_offset_cal - image_cal[0]) * gain_cal) + offset_cal;
+		int frameMax = ((frame.pixels_data[0] + pre_offset_cal - image_cal[0]) * gain_cal) + offset_cal;
+		int frameMin = ((frame.pixels_data[0] + pre_offset_cal - image_cal[0]) * gain_cal) + offset_cal;
 		for (i = 0; i < PIXELS_DATA_SIZE; i++) { // get the min and max values
 			// only bother if the pixel isn't dead
 			if (!deadpixel_map[i]) {
-				int x = ((frame[i] + pre_offset_cal - image_cal[i]) * gain_cal) + offset_cal;
+				int x = ((frame.pixels_data[i] + pre_offset_cal - image_cal[i]) * gain_cal) + offset_cal;
 				if (x > frameMax) {
 					frameMax = x;
 				}
@@ -218,9 +218,9 @@ int main(int argc, char *argv[])
 		}
 		// second time through, this time actually scaling data
 		for (i = 0; i < PIXELS_DATA_SIZE; i++) {
-			int x = ((frame[i] + pre_offset_cal - image_cal[i]) * gain_cal) + offset_cal;
+			int x = ((frame.pixels_data[i] + pre_offset_cal - image_cal[i]) * gain_cal) + offset_cal;
 			if (deadpixel_map[i]) {
-				x = ((frame[i-1] + pre_offset_cal - image_cal[i-1]) * gain_cal) + offset_cal;
+				x = ((frame.pixels_data[i-1] + pre_offset_cal - image_cal[i-1]) * gain_cal) + offset_cal;
 			}
 			x = (((double)x - frameMin)/(frameMax - frameMin)) * (235 - 16) + 16;
 			if (fliph && flipv) {
@@ -238,7 +238,7 @@ int main(int argc, char *argv[])
 		}
 		write(fdwr, img, sizeof img);
 #else
-		write(fdwr, frame, sizeof frame);
+		write(fdwr, frame.pixels_data, sizeof frame.pixels_data);
 #endif
 	}
 

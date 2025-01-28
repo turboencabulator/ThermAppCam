@@ -104,7 +104,7 @@ int thermapp_usb_connect(ThermApp *thermapp);
 int thermapp_thread_create(ThermApp *thermapp);
 int thermapp_close(ThermApp *thermapp);
 
-int thermapp_getImage(ThermApp *thermapp, int16_t *ImgData);
+int thermapp_getImage(ThermApp *thermapp, struct thermapp_packet *frame);
 uint32_t thermapp_getSerialNumber(ThermApp *thermapp);
 uint16_t thermapp_getHardwareVersion(ThermApp *thermapp);
 uint16_t thermapp_getFirmwareVersion(ThermApp *thermapp);

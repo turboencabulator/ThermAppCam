@@ -347,7 +347,7 @@ thermapp_close(ThermApp *thermapp)
 
 // This function for getting frame pixel data
 int
-thermapp_getImage(ThermApp *thermapp, int16_t *ImgData)
+thermapp_getImage(ThermApp *thermapp, struct thermapp_packet *frame)
 {
 	int ret = 0;
 
@@ -364,7 +364,7 @@ thermapp_getImage(ThermApp *thermapp, int16_t *ImgData)
 		thermapp->temperature = thermapp->data_done->header.temperature;
 		thermapp->frame_count = thermapp->data_done->header.frame_count;
 
-		memcpy(ImgData, thermapp->data_done->pixels_data, sizeof thermapp->data_done->pixels_data);
+		memcpy(frame, thermapp->data_done, sizeof *thermapp->data_done);
 	}
 
 	pthread_mutex_unlock(&thermapp->mutex_getimage);

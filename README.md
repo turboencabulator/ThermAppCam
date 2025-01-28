@@ -7,7 +7,7 @@ This fork is designed to allow the Therm-App thermal imaging camera for use as a
 * Image range scaling
 * YUV (V4L2_PIX_FMT_YUV420) instead of Grey (V4L2_PIX_FMT_GREY) output for better compatibility with security software (eg. motion or mjpgstreamer)
 * Image is the right way round by default (instead of horizontally flipped)
-* Image can be vertically flipped (arg = 1 for vflip, = 0 for normal)
+* Image can be flipped horizontally or vertically (`-H` or `-V` options)
 
 ## Dependencies
 * [v4l2loopback](https://github.com/umlaeute/v4l2loopback)
@@ -28,12 +28,22 @@ sudo modprobe v4l2loopback
 
 Plug in the camera.  Keep the lens covered as you start the software:
 ```
-sudo thermapp
+sudo thermapp [options]
 ```
 
 The software will read 50 frames for its automatic calibration.  After that is complete, you may remove the lens cap and open `/dev/video0` in your video player of choice.
 
 To quit, either press Ctrl+C or unplug the camera.
+
+## Options
+<dl>
+<dt><code>-H</code></dt>
+<dd>Flip the image horizontally.</dd>
+<dt><code>-V</code></dt>
+<dd>Flip the image vertically.</dd>
+<dt><code>-h</code></dt>
+<dd>Show the help message and exit.</dd>
+</dl>
 
 ## Troubleshooting
 * Try a different cable.  Use a high-quality USB cable.

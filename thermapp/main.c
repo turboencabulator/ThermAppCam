@@ -68,6 +68,29 @@ int main(int argc, char *argv[])
 	int16_t frame[PIXELS_DATA_SIZE];
 	int ret = EXIT_SUCCESS;
 
+	int fliph = 1;
+	int flipv = 0;
+	int opt;
+	while ((opt = getopt(argc, argv, "HVh")) != -1) {
+		switch (opt) {
+		case 'H':
+			fliph = 0;
+			break;
+		case 'V':
+			flipv = 1;
+			break;
+		case 'h':
+			printf("Usage: %s [options]\n", argv[0]);
+			printf("  -H            Flip the image horizontally\n");
+			printf("  -V            Flip the image vertically\n");
+			printf("  -h            Show this help message and exit\n");
+			goto done1;
+		default:
+			ret = EXIT_FAILURE;
+			goto done1;
+		}
+	}
+
 	ThermApp *therm = thermapp_open();
 	if (!therm) {
 		ret = EXIT_FAILURE;
@@ -88,11 +111,6 @@ int main(int argc, char *argv[])
 	printf("Firmware version: %d\n", thermapp_getFirmwareVersion(therm));
 
 #ifndef FRAME_RAW
-	int flipv = 0;
-	if (argc >= 2) {
-		flipv = *argv[1];
-	}
-
 	// get cal
 	double pre_offset_cal = 0;
 	double gain_cal = 1;
@@ -200,10 +218,14 @@ int main(int argc, char *argv[])
 				x = ((frame[i-1] + pre_offset_cal - image_cal[i-1]) * gain_cal) + offset_cal;
 			}
 			x = (((double)x - frameMin)/(frameMax - frameMin)) * (235 - 16) + 16;
-			if (flipv) {
+			if (fliph && flipv) {
+				img[PIXELS_DATA_SIZE - i] = x;
+			} else if (fliph) {
+				img[((i/FRAME_WIDTH)+1)*FRAME_WIDTH - i%FRAME_WIDTH - 1] = x;
+			} else if (flipv) {
 				img[PIXELS_DATA_SIZE - ((i/FRAME_WIDTH)+1)*FRAME_WIDTH + i%FRAME_WIDTH] = x;
 			} else {
-				img[((i/FRAME_WIDTH)+1)*FRAME_WIDTH - i%FRAME_WIDTH - 1] = x;
+				img[i] = x;
 			}
 		}
 		for (; i < sizeof img; i++) {

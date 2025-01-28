@@ -1,14 +1,14 @@
 #include "thermapp.h"
 
+#include <fcntl.h>
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
-#include <errno.h>
 
 #define VIDEO_DEVICE "/dev/video0"
 #undef FRAME_RAW
@@ -111,9 +111,15 @@ int main(int argc, char *argv[])
 		goto done2;
 	}
 
-	printf("Serial number: %d\n", thermapp_getSerialNumber(therm));
-	printf("Hardware version: %d\n", thermapp_getHardwareVersion(therm));
-	printf("Firmware version: %d\n", thermapp_getFirmwareVersion(therm));
+	uint32_t serial_num = frame.header.serial_num_lo
+	                    | frame.header.serial_num_hi << 16;
+	printf("Serial number: %" PRIu32 "\n", serial_num);
+	printf("Hardware version: %" PRIu16 "\n", frame.header.hardware_ver);
+	printf("Firmware version: %" PRIu16 "\n", frame.header.firmware_ver);
+
+	// We don't know offset and quant value for temperature.
+	// We use experimental value.
+	printf("Temperature: %f\n", (frame.header.temperature - 14336) * 0.00652);
 
 #ifndef FRAME_RAW
 	// get cal

@@ -16,15 +16,11 @@
 * along with this program. If not, see <http://www.gnu.org/licenses/>.     *
 ***************************************************************************/
 
+#include "thermapp.h"
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-
-#include <time.h>
 #include <string.h>
-#include <errno.h>
-
-#include "thermapp.h"
 
 #define ROUND_UP_512(num) (((num)+511)&~511)
 
@@ -357,49 +353,10 @@ thermapp_getImage(ThermApp *thermapp, struct thermapp_packet *frame)
 	if (thermapp->complete) {
 		ret = -1;
 	} else {
-		thermapp->serial_num = thermapp->data_done->header.serial_num_lo
-		                     | thermapp->data_done->header.serial_num_hi << 16;
-		thermapp->hardware_ver = thermapp->data_done->header.hardware_ver;
-		thermapp->firmware_ver = thermapp->data_done->header.firmware_ver;
-		thermapp->temperature = thermapp->data_done->header.temperature;
-		thermapp->frame_count = thermapp->data_done->header.frame_count;
-
 		memcpy(frame, thermapp->data_done, sizeof *thermapp->data_done);
 	}
 
 	pthread_mutex_unlock(&thermapp->mutex_getimage);
 
 	return ret;
-}
-
-uint32_t
-thermapp_getSerialNumber(ThermApp *thermapp)
-{
-	return thermapp->serial_num;
-}
-
-uint16_t
-thermapp_getHardwareVersion(ThermApp *thermapp)
-{
-	return thermapp->hardware_ver;
-}
-
-uint16_t
-thermapp_getFirmwareVersion(ThermApp *thermapp)
-{
-	return thermapp->firmware_ver;
-}
-
-//We don't know offset and quant value for temperature.
-//We use experimental value.
-float
-thermapp_getTemperature(ThermApp *thermapp)
-{
-	return (thermapp->temperature - 14336) * 0.00652;
-}
-
-uint16_t
-thermapp_getFrameCount(ThermApp *thermapp)
-{
-	return thermapp->frame_count;
 }

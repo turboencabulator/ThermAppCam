@@ -19,11 +19,9 @@
 #ifndef THERMAPP_H_
 #define THERMAPP_H_
 
+#include <libusb.h>
 #include <pthread.h>
 #include <stdint.h>
-#include <stdio.h>
-
-#include <libusb.h>
 
 #define VENDOR  0x1772
 #define PRODUCT 0x0002
@@ -91,11 +89,6 @@ typedef struct thermapp {
 	struct cfg_packet *cfg;
 	struct thermapp_packet *data_in;
 	struct thermapp_packet *data_done;
-	uint32_t serial_num;
-	uint16_t hardware_ver;
-	uint16_t firmware_ver;
-	int16_t temperature;
-	uint16_t frame_count;
 } ThermApp;
 
 
@@ -105,10 +98,5 @@ int thermapp_thread_create(ThermApp *thermapp);
 int thermapp_close(ThermApp *thermapp);
 
 int thermapp_getImage(ThermApp *thermapp, struct thermapp_packet *frame);
-uint32_t thermapp_getSerialNumber(ThermApp *thermapp);
-uint16_t thermapp_getHardwareVersion(ThermApp *thermapp);
-uint16_t thermapp_getFirmwareVersion(ThermApp *thermapp);
-float thermapp_getTemperature(ThermApp *thermapp);
-uint16_t thermapp_getFrameCount(ThermApp *thermapp);
 
 #endif /* THERMAPP_H_ */

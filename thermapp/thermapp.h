@@ -26,13 +26,21 @@
 #define VENDOR  0x1772
 #define PRODUCT 0x0002
 
+#define HEADER_SIZE   64
 #define FRAME_WIDTH  384
 #define FRAME_HEIGHT 288
 #define FRAME_PIXELS (FRAME_WIDTH * FRAME_HEIGHT)
+#define FRAME_SIZE   (HEADER_SIZE + 2*FRAME_PIXELS)
 
+// Device apparently only works with 512-byte chunks of data.
+// Note the frame is padded to a multiple of 512 bytes.
+#define CHUNK_SIZE   512
+#define FRAME_PADDED_SIZE ((FRAME_SIZE+CHUNK_SIZE-1) & ~(CHUNK_SIZE-1))
+
+// USB bulk transfers should ideally be FRAME_PADDED_SIZE but we support smaller.
 #define TRANSFER_SIZE 8192
-#if (TRANSFER_SIZE % 512) || (TRANSFER_SIZE < 512)
-#error TRANSFER_SIZE must be a multiple of 512
+#if (TRANSFER_SIZE % CHUNK_SIZE) || (TRANSFER_SIZE < CHUNK_SIZE)
+#error TRANSFER_SIZE must be a multiple of CHUNK_SIZE
 #endif
 
 // AD5628 DAC in Therm App is for generating control voltage
@@ -86,16 +94,16 @@ struct thermapp_usb_dev {
 	pthread_mutex_t mutex_frame_swap;
 	pthread_cond_t cond_frame_ready;
 
-	struct thermapp_cfg *cfg;
-	struct thermapp_frame *frame_in;
-	struct thermapp_frame *frame_done;
+	unsigned char *cfg;
+	unsigned char *frame_in;
+	unsigned char *frame_done;
 };
 
 
 struct thermapp_usb_dev *thermapp_usb_open(void);
 int thermapp_usb_connect(struct thermapp_usb_dev *);
 int thermapp_usb_thread_create(struct thermapp_usb_dev *);
-int thermapp_usb_frame_read(struct thermapp_usb_dev *, struct thermapp_frame *);
+int thermapp_usb_frame_read(struct thermapp_usb_dev *, void *, size_t);
 int thermapp_usb_close(struct thermapp_usb_dev *);
 
 #endif /* THERMAPP_H */

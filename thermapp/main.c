@@ -108,7 +108,7 @@ main(int argc, char *argv[])
 	struct thermapp_frame frame;
 	if (thermapp_usb_connect(thermdev)
 	 || thermapp_usb_thread_create(thermdev)
-	 || thermapp_usb_frame_read(thermdev, &frame)) {
+	 || thermapp_usb_frame_read(thermdev, &frame, sizeof frame)) {
 		ret = EXIT_FAILURE;
 		goto done2;
 	}
@@ -135,7 +135,7 @@ main(int argc, char *argv[])
 	memset(image_cal, 0, sizeof image_cal);
 	printf("Calibrating... cover the lens!\n");
 	for (int i = 0; i < 50; i++) {
-		if (thermapp_usb_frame_read(thermdev, &frame)) {
+		if (thermapp_usb_frame_read(thermdev, &frame, sizeof frame)) {
 			goto done2;
 		}
 
@@ -206,7 +206,7 @@ main(int argc, char *argv[])
 		goto done3;
 	}
 
-	while (thermapp_usb_frame_read(thermdev, &frame) == 0) {
+	while (thermapp_usb_frame_read(thermdev, &frame, sizeof frame) == 0) {
 #ifndef FRAME_RAW
 		uint8_t img[FRAME_PIXELS * 3 / 2];
 		int i;

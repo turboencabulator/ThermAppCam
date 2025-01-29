@@ -22,7 +22,40 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define ROUND_UP_512(num) (((num)+511)&~511)
+static const struct thermapp_cfg initial_cfg = {
+	.preamble[0] = 0xa5a5,
+	.preamble[1] = 0xa5a5,
+	.preamble[2] = 0xa5a5,
+	.preamble[3] = 0xa5d5,
+	.modes       = 0x0002, //test pattern low
+	//.serial_num_lo = 0,
+	//.serial_num_hi = 0,
+	//.hardware_ver = 0,
+	//.firmware_ver = 0,
+	.data_09     = FRAME_HEIGHT,
+	.data_0a     = FRAME_WIDTH,
+	.data_0b     = FRAME_HEIGHT,
+	.data_0c     = FRAME_WIDTH,
+	.data_0d     = 0x0019,
+	.data_0e     = 0x0000,
+	//.temperature = 0,
+	.VoutA       = 0x075c,
+	.data_11     = 0x0b85,
+	.VoutC       = 0x05f4,
+	.VoutD       = 0x0800,
+	.VoutE       = 0x0b85,
+	.data_15     = 0x0b85,
+	.data_16     = 0x0000,
+	.data_17     = 0x0570,
+	.data_18     = 0x0b85,
+	.data_19     = 0x0040,
+	//.frame_count = 0,
+	.data_1b     = 0x0000,
+	.data_1c     = 0x0050,
+	.data_1d     = 0x0003,
+	.data_1e     = 0x0000,
+	.data_1f     = 0x0fff,
+};
 
 struct thermapp_usb_dev *
 thermapp_usb_open(void)
@@ -33,53 +66,25 @@ thermapp_usb_open(void)
 		goto err1;
 	}
 
-	dev->cfg = calloc(1, sizeof *dev->cfg);
+	dev->cfg = malloc(HEADER_SIZE);
 	if (!dev->cfg) {
-		perror("calloc");
+		perror("malloc");
 		goto err2;
 	}
 
-	dev->frame_in = malloc(ROUND_UP_512(sizeof *dev->frame_in));
+	dev->frame_in = malloc(FRAME_PADDED_SIZE);
 	if (!dev->frame_in) {
 		perror("malloc");
 		goto err2;
 	}
 
-	dev->frame_done = malloc(ROUND_UP_512(sizeof *dev->frame_done));
+	dev->frame_done = malloc(FRAME_PADDED_SIZE);
 	if (!dev->frame_done) {
 		perror("malloc");
 		goto err2;
 	}
 
-	//Initialize data struct
-	// this init data was received from usbmonitor
-	dev->cfg->preamble[0] = 0xa5a5;
-	dev->cfg->preamble[1] = 0xa5a5;
-	dev->cfg->preamble[2] = 0xa5a5;
-	dev->cfg->preamble[3] = 0xa5d5;
-	dev->cfg->modes = 0x0002; //test pattern low
-	dev->cfg->data_09 = FRAME_HEIGHT;
-	dev->cfg->data_0a = FRAME_WIDTH;
-	dev->cfg->data_0b = FRAME_HEIGHT;
-	dev->cfg->data_0c = FRAME_WIDTH;
-	dev->cfg->data_0d = 0x0019;
-	dev->cfg->data_0e = 0x0000;
-	dev->cfg->VoutA = 0x075c;
-	dev->cfg->data_11 = 0x0b85;
-	dev->cfg->VoutC = 0x05f4;
-	dev->cfg->VoutD = 0x0800;
-	dev->cfg->VoutE = 0x0b85;
-	dev->cfg->data_15 = 0x0b85;
-	dev->cfg->data_16 = 0x0000;
-	dev->cfg->data_17 = 0x0570;
-	dev->cfg->data_18 = 0x0b85;
-	dev->cfg->data_19 = 0x0040;
-	dev->cfg->data_1b = 0x0000;
-	dev->cfg->data_1c = 0x0050;
-	dev->cfg->data_1d = 0x0003;
-	dev->cfg->data_1e = 0x0000;
-	dev->cfg->data_1f = 0x0fff;
-
+	memcpy(dev->cfg, &initial_cfg, HEADER_SIZE);
 	return dev;
 
 err2:
@@ -181,47 +186,45 @@ transfer_cb_in(struct libusb_transfer *transfer)
 	struct thermapp_usb_dev *dev = (struct thermapp_usb_dev *)transfer->user_data;
 
 	if (transfer->status == LIBUSB_TRANSFER_COMPLETED) {
-		// Device apparently only works with 512-byte chunks of data.
-		// Note the frame is padded to a multiple of 512 bytes.
-		if (transfer->actual_length % 512) {
+		if (transfer->actual_length % CHUNK_SIZE) {
 			fprintf(stderr, "discarding partial transfer of size %u\n", transfer->actual_length);
-			transfer->buffer = (unsigned char *)dev->frame_in;
+			transfer->buffer = dev->frame_in;
 			transfer->length = TRANSFER_SIZE;
 		} else if (transfer->actual_length) {
-			unsigned char *buf = (unsigned char *)dev->frame_in;
+			unsigned char *buf = dev->frame_in;
 			size_t old = (unsigned char *)transfer->buffer - buf;
 			size_t len = old + transfer->actual_length;
 
 			if (!old) {
 				// Sync to start of frame.
-				// Look for preamble at start of 512-byte chunk.
-				while (len >= 512) {
-					if (memcmp(buf, dev->cfg, sizeof dev->cfg->preamble) == 0) {
+				// Look for preamble at start of chunk.
+				while (len >= CHUNK_SIZE) {
+					if (memcmp(buf, &initial_cfg, sizeof initial_cfg.preamble) == 0) {
 						break;
 					}
-					buf += 512;
-					len -= 512;
+					buf += CHUNK_SIZE;
+					len -= CHUNK_SIZE;
 				}
 				memmove(dev->frame_in, buf, len);
 			}
 
-			if (len == ROUND_UP_512(sizeof *dev->frame_in)) {
+			if (len == FRAME_PADDED_SIZE) {
 				// Frame complete.
 				pthread_mutex_lock(&dev->mutex_frame_swap);
-				struct thermapp_frame *tmp = dev->frame_done;
+				unsigned char *tmp = dev->frame_done;
 				dev->frame_done = dev->frame_in;
 				dev->frame_in = tmp;
 				pthread_cond_broadcast(&dev->cond_frame_ready);
 				pthread_mutex_unlock(&dev->mutex_frame_swap);
 
-				transfer->buffer = (unsigned char *)dev->frame_in;
+				transfer->buffer = dev->frame_in;
 				len = 0;
 			}
 
-			transfer->buffer = (unsigned char *)dev->frame_in + len;
+			transfer->buffer = dev->frame_in + len;
 			transfer->length = TRANSFER_SIZE;
-			if (transfer->length > ROUND_UP_512(sizeof *dev->frame_in) - len) {
-				transfer->length = ROUND_UP_512(sizeof *dev->frame_in) - len;
+			if (transfer->length > FRAME_PADDED_SIZE - len) {
+				transfer->length = FRAME_PADDED_SIZE - len;
 			}
 		}
 
@@ -249,8 +252,8 @@ read_async(void *ctx)
 	libusb_fill_bulk_transfer(dev->transfer_out,
 	                          dev->usb,
 	                          LIBUSB_ENDPOINT_OUT | 2,
-	                          (unsigned char *)dev->cfg,
-	                          sizeof *dev->cfg,
+	                          dev->cfg,
+	                          HEADER_SIZE,
 	                          transfer_cb_out,
 	                          dev,
 	                          0);
@@ -265,7 +268,7 @@ read_async(void *ctx)
 	libusb_fill_bulk_transfer(dev->transfer_in,
 	                          dev->usb,
 	                          LIBUSB_ENDPOINT_IN | 1,
-	                          (unsigned char *)dev->frame_in,
+	                          dev->frame_in,
 	                          TRANSFER_SIZE,
 	                          transfer_cb_in,
 	                          (void *)dev,
@@ -313,17 +316,17 @@ thermapp_usb_thread_create(struct thermapp_usb_dev *dev)
 }
 
 int
-thermapp_usb_frame_read(struct thermapp_usb_dev *dev, struct thermapp_frame *frame)
+thermapp_usb_frame_read(struct thermapp_usb_dev *dev, void *buf, size_t len)
 {
 	int ret = 0;
 
 	pthread_mutex_lock(&dev->mutex_frame_swap);
 	pthread_cond_wait(&dev->cond_frame_ready, &dev->mutex_frame_swap);
 
-	if (dev->read_async_completed) {
+	if (dev->read_async_completed || len > FRAME_PADDED_SIZE) {
 		ret = -1;
 	} else {
-		memcpy(frame, dev->frame_done, sizeof *dev->frame_done);
+		memcpy(buf, dev->frame_done, len);
 	}
 
 	pthread_mutex_unlock(&dev->mutex_frame_swap);

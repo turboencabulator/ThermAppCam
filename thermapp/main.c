@@ -68,6 +68,8 @@ int
 main(int argc, char *argv[])
 {
 	int ret = EXIT_SUCCESS;
+	struct thermapp_usb_dev *thermdev = NULL;
+	int fdwr = -1;
 
 	int fliph = 1;
 	int flipv = 0;
@@ -90,17 +92,17 @@ main(int argc, char *argv[])
 			printf("  -V            Flip the image vertically\n");
 			printf("  -d device     Write frames to selected device [default: " VIDEO_DEVICE "]\n");
 			printf("  -h            Show this help message and exit\n");
-			goto done1;
+			goto done;
 		default:
 			ret = EXIT_FAILURE;
-			goto done1;
+			goto done;
 		}
 	}
 
-	struct thermapp_usb_dev *thermdev = thermapp_usb_open();
+	thermdev = thermapp_usb_open();
 	if (!thermdev) {
 		ret = EXIT_FAILURE;
-		goto done1;
+		goto done;
 	}
 
 	// Discard 1st frame, it usually has the header repeated twice
@@ -110,7 +112,7 @@ main(int argc, char *argv[])
 	 || thermapp_usb_thread_create(thermdev)
 	 || thermapp_usb_frame_read(thermdev, &frame, sizeof frame)) {
 		ret = EXIT_FAILURE;
-		goto done2;
+		goto done;
 	}
 
 	uint32_t serial_num = frame.header.serial_num_lo
@@ -136,7 +138,7 @@ main(int argc, char *argv[])
 	printf("Calibrating... cover the lens!\n");
 	for (int i = 0; i < 50; i++) {
 		if (thermapp_usb_frame_read(thermdev, &frame, sizeof frame)) {
-			goto done2;
+			goto done;
 		}
 
 		printf("\rCaptured calibration frame %d/50. Keep lens covered.", i+1);
@@ -165,11 +167,11 @@ main(int argc, char *argv[])
 
 	struct v4l2_format vid_format;
 
-	int fdwr = open(videodev, O_WRONLY);
+	fdwr = open(videodev, O_WRONLY);
 	if (fdwr < 0) {
 		perror("open");
 		ret = EXIT_FAILURE;
-		goto done2;
+		goto done;
 	}
 
 	memset(&vid_format, 0, sizeof vid_format);
@@ -178,7 +180,7 @@ main(int argc, char *argv[])
 	if (ioctl(fdwr, VIDIOC_G_FMT, &vid_format)) {
 		perror("VIDIOC_G_FMT");
 		ret = EXIT_FAILURE;
-		goto done3;
+		goto done;
 	}
 
 	vid_format.fmt.pix.width = FRAME_WIDTH;
@@ -195,7 +197,7 @@ main(int argc, char *argv[])
 	                      &linewidth)) {
 		fprintf(stderr, "unable to guess correct settings for format '%d'\n", FRAME_FORMAT);
 		ret = EXIT_FAILURE;
-		goto done3;
+		goto done;
 	}
 	vid_format.fmt.pix.sizeimage = framesize;
 	vid_format.fmt.pix.bytesperline = linewidth;
@@ -203,7 +205,7 @@ main(int argc, char *argv[])
 	if (ioctl(fdwr, VIDIOC_S_FMT, &vid_format)) {
 		perror("VIDIOC_S_FMT");
 		ret = EXIT_FAILURE;
-		goto done3;
+		goto done;
 	}
 
 	while (thermapp_usb_frame_read(thermdev, &frame, sizeof frame) == 0) {
@@ -250,10 +252,10 @@ main(int argc, char *argv[])
 #endif
 	}
 
-done3:
-	close(fdwr);
-done2:
-	thermapp_usb_close(thermdev);
-done1:
+done:
+	if (fdwr >= 0)
+		close(fdwr);
+	if (thermdev)
+		thermapp_usb_close(thermdev);
 	return ret;
 }

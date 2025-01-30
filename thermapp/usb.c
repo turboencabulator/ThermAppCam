@@ -63,33 +63,32 @@ thermapp_usb_open(void)
 	struct thermapp_usb_dev *dev = calloc(1, sizeof *dev);
 	if (!dev) {
 		perror("calloc");
-		goto err1;
+		goto err;
 	}
 
 	dev->cfg = malloc(HEADER_SIZE);
 	if (!dev->cfg) {
 		perror("malloc");
-		goto err2;
+		goto err;
 	}
 
 	dev->frame_in = malloc(FRAME_PADDED_SIZE);
 	if (!dev->frame_in) {
 		perror("malloc");
-		goto err2;
+		goto err;
 	}
 
 	dev->frame_done = malloc(FRAME_PADDED_SIZE);
 	if (!dev->frame_done) {
 		perror("malloc");
-		goto err2;
+		goto err;
 	}
 
 	memcpy(dev->cfg, &initial_cfg, HEADER_SIZE);
 	return dev;
 
-err2:
+err:
 	thermapp_usb_close(dev);
-err1:
 	return NULL;
 }
 
@@ -334,11 +333,11 @@ thermapp_usb_frame_read(struct thermapp_usb_dev *dev, void *buf, size_t len)
 	return ret;
 }
 
-int
+void
 thermapp_usb_close(struct thermapp_usb_dev *dev)
 {
 	if (!dev)
-		return -1;
+		return;
 
 	cancel_async(dev, 0);
 
@@ -359,6 +358,4 @@ thermapp_usb_close(struct thermapp_usb_dev *dev)
 	free(dev->frame_in);
 	free(dev->cfg);
 	free(dev);
-
-	return 0;
 }

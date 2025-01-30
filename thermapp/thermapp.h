@@ -104,6 +104,6 @@ struct thermapp_usb_dev *thermapp_usb_open(void);
 int thermapp_usb_connect(struct thermapp_usb_dev *);
 int thermapp_usb_thread_create(struct thermapp_usb_dev *);
 int thermapp_usb_frame_read(struct thermapp_usb_dev *, void *, size_t);
-int thermapp_usb_close(struct thermapp_usb_dev *);
+void thermapp_usb_close(struct thermapp_usb_dev *);
 
 #endif /* THERMAPP_H */

@@ -37,12 +37,29 @@ The software will read 50 frames for its automatic calibration.  After that is c
 
 To quit, either press Ctrl+C or unplug the camera.
 
+## Calibration
+Your camera's factory calibration data is stored on ThermApp servers, not on the camera itself.  If you have used the official ThermApp Android app with your camera, it will connect and download that data on the first time you use it.  You can find these calibration files in your Android device's `ThermApp` directory.  Look for a subdirectory with the same name as your camera's serial number, which should contain files such as `0.bin`, `1.bin`, etc.  Be sure to keep backups of these files in case the server ever becomes unavailable!
+
+This software may be able to use that factory calibration data in place of its automatic calibration.
+
+To download the calibration files without using the official app, use the `get-calibration.py` script, found in the `calibration` directory.  You will need your camera's serial number and possibly the hardware and firmware versions; you can find these by viewing the first few lines of output from the `sudo thermapp` command above.  Then substitute `${SERIALNUMBER}` with your serial number in the command below, and run:
+```
+cd calibration
+./get-calibration.py --serialNumber=${SERIALNUMBER}
+```
+
+This will create a subdirectory of the current directory with the same name as your camera's serial number (to match how the files are stored on Android), and then will download the calibration files to it.
+
+The official ThermApp Android app sends other information to the server as part of the request, including your camera's hardware and firmware versions, and information about your Android device.  These may be necessary for the server to honor your request, see `./get-calibration.py --help` for a full list.
+
 ## Options
 <dl>
 <dt><code>-H</code></dt>
 <dd>Flip the image horizontally.</dd>
 <dt><code>-V</code></dt>
 <dd>Flip the image vertically.</dd>
+<dt><code>-c directory</code></dt>
+<dd>Directory containing calibration data.  This directory should contain a subdirectory with the same name as your camera's serial number.</dd>
 <dt><code>-d device</code></dt>
 <dd>Send video to a particular video device.  The default device is <code>/dev/video0</code>.</dd>
 <dt><code>-h</code></dt>
@@ -58,5 +75,6 @@ To quit, either press Ctrl+C or unplug the camera.
 ## Todo
 * Histogram Equalization instead of linear image range scaling
 * Smarter dead pixel detection
-* Download and use the camera's calibration data
+* Automatically download the camera's factory calibration data
+* Use the camera's factory calibration data
 * Colour LUT support

@@ -29,6 +29,8 @@
 #error TRANSFER_SIZE must be a multiple of CHUNK_SIZE
 #endif
 
+#define CAL_FILES 12
+
 // AD5628 DAC in Therm App is for generating control voltage
 // VREF = 2.5 volts 11 Bit
 struct thermapp_cfg {
@@ -85,11 +87,25 @@ struct thermapp_usb_dev {
 	unsigned char *frame_done;
 };
 
+struct thermapp_cal {
+	uint32_t serial_num;
+
+	char *path_buf;
+	char *leaf_ptr;
+	size_t leaf_len;
+
+	unsigned char *raw_buf[CAL_FILES];
+	size_t raw_len[CAL_FILES];
+};
+
 
 struct thermapp_usb_dev *thermapp_usb_open(void);
 int thermapp_usb_connect(struct thermapp_usb_dev *);
 int thermapp_usb_thread_create(struct thermapp_usb_dev *);
 int thermapp_usb_frame_read(struct thermapp_usb_dev *, void *, size_t);
 void thermapp_usb_close(struct thermapp_usb_dev *);
+
+struct thermapp_cal *thermapp_cal_open(const char *, uint32_t);
+void thermapp_cal_close(struct thermapp_cal *);
 
 #endif /* THERMAPP_H */

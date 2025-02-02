@@ -72,19 +72,24 @@ main(int argc, char *argv[])
 {
 	int ret = EXIT_SUCCESS;
 	struct thermapp_usb_dev *thermdev = NULL;
+	struct thermapp_cal *thermcal = NULL;
 	int fdwr = -1;
 
 	int fliph = 1;
 	int flipv = 0;
+	const char *caldir = NULL;
 	const char *videodev = VIDEO_DEVICE;
 	int opt;
-	while ((opt = getopt(argc, argv, "HVd:h")) != -1) {
+	while ((opt = getopt(argc, argv, "HVc:d:h")) != -1) {
 		switch (opt) {
 		case 'H':
 			fliph = 0;
 			break;
 		case 'V':
 			flipv = 1;
+			break;
+		case 'c':
+			caldir = optarg;
 			break;
 		case 'd':
 			videodev = optarg;
@@ -93,6 +98,7 @@ main(int argc, char *argv[])
 			printf("Usage: %s [options]\n", argv[0]);
 			printf("  -H            Flip the image horizontally\n");
 			printf("  -V            Flip the image vertically\n");
+			printf("  -c dir        Path to the calibration directory\n");
 			printf("  -d device     Write frames to selected device [default: " VIDEO_DEVICE "]\n");
 			printf("  -h            Show this help message and exit\n");
 			goto done;
@@ -123,6 +129,12 @@ main(int argc, char *argv[])
 	printf("Serial number: %" PRIu32 "\n", serial_num);
 	printf("Hardware version: %" PRIu16 "\n", frame.header.hardware_ver);
 	printf("Firmware version: %" PRIu16 "\n", frame.header.firmware_ver);
+
+	thermcal = thermapp_cal_open(caldir, serial_num);
+	if (!thermcal) {
+		ret = EXIT_FAILURE;
+		goto done;
+	}
 
 	// We don't know offset and quant value for temperature.
 	// We use experimental value.
@@ -258,6 +270,8 @@ main(int argc, char *argv[])
 done:
 	if (fdwr >= 0)
 		close(fdwr);
+	if (thermcal)
+		thermapp_cal_close(thermcal);
 	if (thermdev)
 		thermapp_usb_close(thermdev);
 	return ret;

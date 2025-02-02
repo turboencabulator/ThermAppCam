@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2019-2025 Kyle Guinn <elyk03@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 CC = gcc
 CFLAGS = -Wall $(shell pkg-config --cflags libusb-1.0)
 LDFLAGS = $(shell pkg-config --libs libusb-1.0) -lpthread

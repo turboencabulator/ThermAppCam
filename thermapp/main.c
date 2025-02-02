@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2019-2025 Kyle Guinn <elyk03@gmail.com>
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "thermapp.h"
 
 #include <fcntl.h>

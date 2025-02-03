@@ -4,10 +4,17 @@
 
 #include "thermapp.h"
 
+#include <endian.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+static const unsigned char preamble[] = {
+	0xa5, 0xa5, 0xa5, 0xa5, 0xa5, 0xa5, 0xd5, 0xa5,
+};
+
+// These are host-endian, must be converted to little-endian before transfer
 static const struct thermapp_cfg initial_cfg = {
 	.preamble[0] = 0xa5a5,
 	.preamble[1] = 0xa5a5,
@@ -70,7 +77,20 @@ thermapp_usb_open(void)
 		goto err;
 	}
 
+#if __BYTE_ORDER == __LITTLE_ENDIAN
 	memcpy(dev->cfg, &initial_cfg, HEADER_SIZE);
+#else
+	unsigned char *src = (unsigned char *)&initial_cfg;
+	unsigned char *dst = dev->cfg;
+	uint16_t word;
+	for (size_t i = 0; i < HEADER_SIZE; i += sizeof word) {
+		memcpy(&word, src, sizeof word);
+		word = htole16(word);
+		memcpy(dst, &word, sizeof word);
+		src += sizeof word;
+		dst += sizeof word;
+	}
+#endif
 	return dev;
 
 err:
@@ -184,7 +204,7 @@ transfer_cb_in(struct libusb_transfer *transfer)
 				// Sync to start of frame.
 				// Look for preamble at start of chunk.
 				while (len >= CHUNK_SIZE) {
-					if (memcmp(buf, &initial_cfg, sizeof initial_cfg.preamble) == 0) {
+					if (memcmp(buf, preamble, sizeof preamble) == 0) {
 						break;
 					}
 					buf += CHUNK_SIZE;
@@ -308,10 +328,25 @@ thermapp_usb_frame_read(struct thermapp_usb_dev *dev, void *buf, size_t len)
 	pthread_mutex_lock(&dev->mutex_frame_swap);
 	pthread_cond_wait(&dev->cond_frame_ready, &dev->mutex_frame_swap);
 
-	if (dev->read_async_completed || len > FRAME_PADDED_SIZE) {
+	if (dev->read_async_completed
+	 || len > FRAME_PADDED_SIZE
+	 || len % sizeof (uint16_t)) {
 		ret = -1;
 	} else {
+#if __BYTE_ORDER == __LITTLE_ENDIAN
 		memcpy(buf, dev->frame_done, len);
+#else
+		unsigned char *src = dev->frame_done;
+		unsigned char *dst = buf;
+		uint16_t word;
+		for (size_t i = 0; i < len; i += sizeof word) {
+			memcpy(&word, src, sizeof word);
+			word = le16toh(word);
+			memcpy(dst, &word, sizeof word);
+			src += sizeof word;
+			dst += sizeof word;
+		}
+#endif
 	}
 
 	pthread_mutex_unlock(&dev->mutex_frame_swap);

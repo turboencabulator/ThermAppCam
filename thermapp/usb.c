@@ -41,7 +41,7 @@ static const struct thermapp_cfg initial_cfg = {
 	.data_16     = 0x0000,
 	.data_17     = 0x0570,
 	.data_18     = 0x0b85,
-	.data_19     = 0x0040,
+	.data_offset = HEADER_SIZE,
 	//.frame_count = 0,
 	.data_1b     = 0x0000,
 	.data_1c     = 0x0050,
@@ -336,6 +336,9 @@ thermapp_usb_frame_read(struct thermapp_usb_dev *dev, void *buf, size_t len)
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 		memcpy(buf, dev->frame_done, len);
 #else
+		// This assumes the data_offset / header_size is always even
+		// therefore header and data combined is a stream of 16-bit little-endian values
+		// TODO: Make it the caller's responsibility to handle endianness?
 		unsigned char *src = dev->frame_done;
 		unsigned char *dst = buf;
 		uint16_t word;

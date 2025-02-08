@@ -56,7 +56,7 @@ struct thermapp_cfg {
 	uint16_t data_16;
 	uint16_t data_17;
 	uint16_t data_18;
-	uint16_t data_19;
+	uint16_t data_offset; // or header_size?
 	uint16_t frame_count;
 	uint16_t data_1b;
 	uint16_t data_1c;
@@ -65,9 +65,9 @@ struct thermapp_cfg {
 	uint16_t data_1f;
 };
 
-struct thermapp_frame {
+union thermapp_frame {
 	struct thermapp_cfg header;
-	int16_t pixels[FRAME_PIXELS];
+	unsigned char bytes[FRAME_PADDED_SIZE];
 };
 
 struct thermapp_usb_dev {

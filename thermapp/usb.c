@@ -105,7 +105,7 @@ thermapp_usb_connect(struct thermapp_usb_dev *dev)
 
 	ret = libusb_init(&dev->ctx);
 	if (ret) {
-		fprintf(stderr, "libusb_init: %s\n", libusb_strerror(ret));
+		fprintf(stderr, "%s: %s\n", "libusb_init", libusb_strerror(ret));
 		return -1;
 	}
 
@@ -114,13 +114,13 @@ thermapp_usb_connect(struct thermapp_usb_dev *dev)
 	dev->usb = libusb_open_device_with_vid_pid(dev->ctx, VENDOR, PRODUCT);
 	if (!dev->usb) {
 		ret = LIBUSB_ERROR_NO_DEVICE;
-		fprintf(stderr, "libusb_open_device_with_vid_pid: %s\n", libusb_strerror(ret));
+		fprintf(stderr, "%s: %s\n", "libusb_open_device_with_vid_pid", libusb_strerror(ret));
 		return -1;
 	}
 
 	ret = libusb_set_configuration(dev->usb, 1);
 	if (ret) {
-		fprintf(stderr, "libusb_set_configuration: %s\n", libusb_strerror(ret));
+		fprintf(stderr, "%s: %s\n", "libusb_set_configuration", libusb_strerror(ret));
 		return -1;
 	}
 
@@ -129,7 +129,7 @@ thermapp_usb_connect(struct thermapp_usb_dev *dev)
 
 	ret = libusb_claim_interface(dev->usb, 0);
 	if (ret) {
-		fprintf(stderr, "libusb_claim_interface: %s\n", libusb_strerror(ret));
+		fprintf(stderr, "%s: %s\n", "libusb_claim_interface", libusb_strerror(ret));
 		return -1;
 	}
 
@@ -142,14 +142,14 @@ cancel_async(struct thermapp_usb_dev *dev, int due_to_transfer_error)
 	if (dev->transfer_in) {
 		int ret = libusb_cancel_transfer(dev->transfer_in);
 		if (ret && ret != LIBUSB_ERROR_NOT_FOUND) {
-			fprintf(stderr, "libusb_cancel_transfer: %s\n", libusb_strerror(ret));
+			fprintf(stderr, "%s: %s\n", "libusb_cancel_transfer", libusb_strerror(ret));
 		}
 	}
 
 	if (dev->transfer_out) {
 		int ret = libusb_cancel_transfer(dev->transfer_out);
 		if (ret && ret != LIBUSB_ERROR_NOT_FOUND) {
-			fprintf(stderr, "libusb_cancel_transfer: %s\n", libusb_strerror(ret));
+			fprintf(stderr, "%s: %s\n", "libusb_cancel_transfer", libusb_strerror(ret));
 		}
 	}
 
@@ -173,7 +173,7 @@ transfer_cb_out(struct libusb_transfer *transfer)
 	if (transfer->status == LIBUSB_TRANSFER_COMPLETED) {
 		int ret = libusb_submit_transfer(transfer);
 		if (ret) {
-			fprintf(stderr, "libusb_submit_transfer: %s\n", libusb_strerror(ret));
+			fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
 		}
 	} else if (transfer->status == LIBUSB_TRANSFER_ERROR
 	        || transfer->status == LIBUSB_TRANSFER_NO_DEVICE
@@ -235,7 +235,7 @@ transfer_cb_in(struct libusb_transfer *transfer)
 
 		int ret = libusb_submit_transfer(transfer);
 		if (ret) {
-			fprintf(stderr, "libusb_submit_transfer: %s\n", libusb_strerror(ret));
+			fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
 		}
 	} else if (transfer->status == LIBUSB_TRANSFER_ERROR
 	        || transfer->status == LIBUSB_TRANSFER_NO_DEVICE
@@ -264,7 +264,7 @@ read_async(void *ctx)
 	                          0);
 	ret = libusb_submit_transfer(dev->transfer_out);
 	if (ret) {
-		fprintf(stderr, "libusb_submit_transfer: %s\n", libusb_strerror(ret));
+		fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
 		libusb_free_transfer(dev->transfer_out);
 		dev->transfer_out = NULL;
 	}
@@ -280,7 +280,7 @@ read_async(void *ctx)
 	                          0);
 	ret = libusb_submit_transfer(dev->transfer_in);
 	if (ret) {
-		fprintf(stderr, "libusb_submit_transfer: %s\n", libusb_strerror(ret));
+		fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
 		libusb_free_transfer(dev->transfer_in);
 		dev->transfer_in = NULL;
 	}
@@ -288,7 +288,7 @@ read_async(void *ctx)
 	while (dev->transfer_out || dev->transfer_in) {
 		ret = libusb_handle_events_completed(dev->ctx, &dev->read_async_completed);
 		if (ret) {
-			fprintf(stderr, "libusb_handle_events_completed: %s\n", libusb_strerror(ret));
+			fprintf(stderr, "%s: %s\n", "libusb_handle_events_completed", libusb_strerror(ret));
 			if (ret == LIBUSB_ERROR_INTERRUPTED) /* stray signal */ {
 				continue;
 			} else {
@@ -312,7 +312,7 @@ thermapp_usb_thread_create(struct thermapp_usb_dev *dev)
 
 	ret = pthread_create(&dev->pthread_read_async, NULL, read_async, (void *)dev);
 	if (ret) {
-		fprintf(stderr, "pthread_create: %s\n", strerror(ret));
+		fprintf(stderr, "%s: %s\n", "pthread_create", strerror(ret));
 		return -1;
 	}
 	dev->read_async_started = 1;

@@ -129,7 +129,7 @@ err:
 }
 
 static void
-cancel_async(struct thermapp_usb_dev *dev, int due_to_transfer_error)
+cancel_async(struct thermapp_usb_dev *dev)
 {
 	if (dev->transfer_in) {
 		int ret = libusb_cancel_transfer(dev->transfer_in);
@@ -142,17 +142,6 @@ cancel_async(struct thermapp_usb_dev *dev, int due_to_transfer_error)
 		int ret = libusb_cancel_transfer(dev->transfer_out);
 		if (ret && ret != LIBUSB_ERROR_NOT_FOUND) {
 			fprintf(stderr, "%s: %s\n", "libusb_cancel_transfer", libusb_strerror(ret));
-		}
-	}
-
-	if (due_to_transfer_error) {
-		if (!dev->transfer_in && !dev->transfer_out) {
-			// All transfers cancelled.
-			// End the event loop and wake all waiters so they can exit.
-			pthread_mutex_lock(&dev->mutex_frame_swap);
-			dev->read_async_completed = 1;
-			pthread_cond_broadcast(&dev->cond_frame_ready);
-			pthread_mutex_unlock(&dev->mutex_frame_swap);
 		}
 	}
 }
@@ -178,7 +167,7 @@ transfer_cb_out(struct libusb_transfer *transfer)
 		libusb_free_transfer(dev->transfer_out);
 		dev->transfer_out = NULL;
 
-		cancel_async(dev, 1);
+		cancel_async(dev);
 	}
 }
 
@@ -240,7 +229,7 @@ transfer_cb_in(struct libusb_transfer *transfer)
 		libusb_free_transfer(dev->transfer_in);
 		dev->transfer_in = NULL;
 
-		cancel_async(dev, 1);
+		cancel_async(dev);
 	}
 }
 
@@ -283,9 +272,9 @@ read_async(void *ctx)
 	}
 
 	while (dev->transfer_out || dev->transfer_in) {
-		ret = libusb_handle_events_completed(dev->ctx, &dev->read_async_completed);
+		ret = libusb_handle_events(dev->ctx);
 		if (ret) {
-			fprintf(stderr, "%s: %s\n", "libusb_handle_events_completed", libusb_strerror(ret));
+			fprintf(stderr, "%s: %s\n", "libusb_handle_events", libusb_strerror(ret));
 			if (ret == LIBUSB_ERROR_INTERRUPTED) /* stray signal */ {
 				continue;
 			} else {
@@ -293,6 +282,12 @@ read_async(void *ctx)
 			}
 		}
 	}
+
+	// All transfers cancelled.  Wake all waiters so they can exit.
+	pthread_mutex_lock(&dev->mutex_frame_swap);
+	dev->read_async_completed = 1;
+	pthread_cond_broadcast(&dev->cond_frame_ready);
+	pthread_mutex_unlock(&dev->mutex_frame_swap);
 
 	return NULL;
 }
@@ -360,7 +355,7 @@ thermapp_usb_close(struct thermapp_usb_dev *dev)
 	if (!dev)
 		return;
 
-	cancel_async(dev, 0);
+	cancel_async(dev);
 
 	if (dev->read_async_started) {
 		pthread_join(dev->pthread_read_async, NULL);

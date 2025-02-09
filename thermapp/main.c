@@ -117,7 +117,6 @@ main(int argc, char *argv[])
 	// Discard 1st frame, it usually has the header repeated twice
 	// and the data shifted into the pad by a corresponding amount.
 	union thermapp_frame frame;
-	int16_t *pixels = (int16_t *)&frame.bytes[HEADER_SIZE];
 	if (thermapp_usb_thread_create(thermdev)
 	 || thermapp_usb_frame_read(thermdev, &frame, sizeof frame)) {
 		ret = EXIT_FAILURE;
@@ -139,47 +138,6 @@ main(int argc, char *argv[])
 	// We don't know offset and quant value for temperature.
 	// We use experimental value.
 	printf("Temperature: %f\n", (frame.header.temperature - 14336) * 0.00652);
-
-#ifndef FRAME_RAW
-	// get cal
-	double pre_offset_cal = 0;
-	double gain_cal = 1;
-	double offset_cal = 0;
-	long meancal = 0;
-	int image_cal[FRAME_PIXELS];
-	int deadpixel_map[FRAME_PIXELS] = { 0 };
-
-	memset(image_cal, 0, sizeof image_cal);
-	printf("Calibrating... cover the lens!\n");
-	for (int i = 0; i < 50; i++) {
-		if (thermapp_usb_frame_read(thermdev, &frame, sizeof frame)) {
-			goto done;
-		}
-		pixels = (int16_t *)&frame.bytes[frame.header.data_offset];
-
-		printf("\rCaptured calibration frame %d/50. Keep lens covered.", i+1);
-		fflush(stdout);
-
-		for (int j = 0; j < FRAME_PIXELS; j++) {
-			image_cal[j] += pixels[j];
-		}
-	}
-	printf("\nCalibration finished\n");
-
-	for (int i = 0; i < FRAME_PIXELS; i++) {
-		image_cal[i] /= 50;
-		meancal += image_cal[i];
-	}
-	meancal /= FRAME_PIXELS;
-	// record the dead pixels
-	for (int i = 0; i < FRAME_PIXELS; i++) {
-		if ((image_cal[i] > meancal + 250) || (image_cal[i] < meancal - 250)) {
-			printf("Dead pixel ID: %d (%d vs %li)\n", i, image_cal[i], meancal);
-			deadpixel_map[i] = 1;
-		}
-	}
-	// end of get cal
-#endif
 
 	struct v4l2_format vid_format;
 
@@ -224,9 +182,49 @@ main(int argc, char *argv[])
 		goto done;
 	}
 
-	while (thermapp_usb_frame_read(thermdev, &frame, sizeof frame) == 0) {
 #ifndef FRAME_RAW
-		pixels = (int16_t *)&frame.bytes[frame.header.data_offset];
+	double pre_offset_cal = 0;
+	double gain_cal = 1;
+	double offset_cal = 0;
+	int image_cal[FRAME_PIXELS];
+	int deadpixel_map[FRAME_PIXELS] = { 0 };
+	int autocal_frame = 50;
+
+	memset(image_cal, 0, sizeof image_cal);
+	printf("Calibrating... cover the lens!\n");
+#endif
+	while (thermapp_usb_frame_read(thermdev, &frame, sizeof frame) == 0) {
+		int16_t *pixels = (int16_t *)&frame.bytes[frame.header.data_offset];
+#ifndef FRAME_RAW
+		if (autocal_frame) {
+			autocal_frame -= 1;
+			printf("\rCaptured calibration frame %d/50. Keep lens covered.", 50 - autocal_frame);
+			fflush(stdout);
+
+			for (int i = 0; i < FRAME_PIXELS; i++) {
+				image_cal[i] += pixels[i];
+			}
+
+			if (autocal_frame) {
+				continue;
+			}
+			printf("\nCalibration finished\n");
+
+			long meancal = 0;
+			for (int i = 0; i < FRAME_PIXELS; i++) {
+				image_cal[i] /= 50;
+				meancal += image_cal[i];
+			}
+			meancal /= FRAME_PIXELS;
+			// record the dead pixels
+			for (int i = 0; i < FRAME_PIXELS; i++) {
+				if ((image_cal[i] > meancal + 250) || (image_cal[i] < meancal - 250)) {
+					printf("Dead pixel ID: %d (%d vs %li)\n", i, image_cal[i], meancal);
+					deadpixel_map[i] = 1;
+				}
+			}
+		}
+
 		uint8_t img[FRAME_PIXELS * 3 / 2];
 		int i;
 		int frameMax = ((pixels[0] + pre_offset_cal - image_cal[0]) * gain_cal) + offset_cal;

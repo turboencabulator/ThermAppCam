@@ -28,6 +28,9 @@
 #if (TRANSFER_SIZE % CHUNK_SIZE) || (TRANSFER_SIZE < CHUNK_SIZE)
 #error TRANSFER_SIZE must be a multiple of CHUNK_SIZE
 #endif
+#if (TRANSFER_SIZE > FRAME_PADDED_SIZE)
+#error TRANSFER_SIZE must not be larger than FRAME_PADDED_SIZE
+#endif
 
 #define CAL_FILES 12
 

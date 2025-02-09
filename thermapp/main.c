@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include <inttypes.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -227,8 +228,8 @@ main(int argc, char *argv[])
 
 		uint8_t img[FRAME_PIXELS * 3 / 2];
 		int i;
-		int frameMax = ((pixels[0] + pre_offset_cal - image_cal[0]) * gain_cal) + offset_cal;
-		int frameMin = ((pixels[0] + pre_offset_cal - image_cal[0]) * gain_cal) + offset_cal;
+		int frameMax = INT_MIN;
+		int frameMin = INT_MAX;
 		for (i = 0; i < FRAME_PIXELS; i++) { // get the min and max values
 			// only bother if the pixel isn't dead
 			if (!deadpixel_map[i]) {
@@ -245,9 +246,10 @@ main(int argc, char *argv[])
 		for (i = 0; i < FRAME_PIXELS; i++) {
 			int x = ((pixels[i] + pre_offset_cal - image_cal[i]) * gain_cal) + offset_cal;
 			if (deadpixel_map[i]) {
-				x = ((pixels[i-1] + pre_offset_cal - image_cal[i-1]) * gain_cal) + offset_cal;
+				x = 16;
+			} else {
+				x = (((double)x - frameMin)/(frameMax - frameMin)) * (235 - 16) + 16;
 			}
-			x = (((double)x - frameMin)/(frameMax - frameMin)) * (235 - 16) + 16;
 			if (fliph && flipv) {
 				img[FRAME_PIXELS - i] = x;
 			} else if (fliph) {

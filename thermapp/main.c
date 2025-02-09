@@ -118,8 +118,7 @@ main(int argc, char *argv[])
 	// and the data shifted into the pad by a corresponding amount.
 	union thermapp_frame frame;
 	int16_t *pixels = (int16_t *)&frame.bytes[HEADER_SIZE];
-	if (thermapp_usb_connect(thermdev)
-	 || thermapp_usb_thread_create(thermdev)
+	if (thermapp_usb_thread_create(thermdev)
 	 || thermapp_usb_frame_read(thermdev, &frame, sizeof frame)) {
 		ret = EXIT_FAILURE;
 		goto done;

@@ -53,9 +53,39 @@ static const struct thermapp_cfg initial_cfg = {
 struct thermapp_usb_dev *
 thermapp_usb_open(void)
 {
+	int ret;
+
 	struct thermapp_usb_dev *dev = calloc(1, sizeof *dev);
 	if (!dev) {
 		perror("calloc");
+		goto err;
+	}
+
+	ret = libusb_init(&dev->ctx);
+	if (ret) {
+		fprintf(stderr, "%s: %s\n", "libusb_init", libusb_strerror(ret));
+		goto err;
+	}
+
+	dev->usb = libusb_open_device_with_vid_pid(dev->ctx, VENDOR, PRODUCT);
+	if (!dev->usb) {
+		ret = LIBUSB_ERROR_NO_DEVICE;
+		fprintf(stderr, "%s: %s\n", "libusb_open_device_with_vid_pid", libusb_strerror(ret));
+		goto err;
+	}
+
+	ret = libusb_set_configuration(dev->usb, 1);
+	if (ret) {
+		fprintf(stderr, "%s: %s\n", "libusb_set_configuration", libusb_strerror(ret));
+		goto err;
+	}
+
+	//if (libusb_kernel_driver_active(dev->usb, 0))
+	//	libusb_detach_kernel_driver(dev->usb, 0);
+
+	ret = libusb_claim_interface(dev->usb, 0);
+	if (ret) {
+		fprintf(stderr, "%s: %s\n", "libusb_claim_interface", libusb_strerror(ret));
 		goto err;
 	}
 
@@ -96,44 +126,6 @@ thermapp_usb_open(void)
 err:
 	thermapp_usb_close(dev);
 	return NULL;
-}
-
-int
-thermapp_usb_connect(struct thermapp_usb_dev *dev)
-{
-	int ret;
-
-	ret = libusb_init(&dev->ctx);
-	if (ret) {
-		fprintf(stderr, "%s: %s\n", "libusb_init", libusb_strerror(ret));
-		return -1;
-	}
-
-	///FIXME: For Debug use libusb_open_device_with_vid_pid
-	/// need to add search device
-	dev->usb = libusb_open_device_with_vid_pid(dev->ctx, VENDOR, PRODUCT);
-	if (!dev->usb) {
-		ret = LIBUSB_ERROR_NO_DEVICE;
-		fprintf(stderr, "%s: %s\n", "libusb_open_device_with_vid_pid", libusb_strerror(ret));
-		return -1;
-	}
-
-	ret = libusb_set_configuration(dev->usb, 1);
-	if (ret) {
-		fprintf(stderr, "%s: %s\n", "libusb_set_configuration", libusb_strerror(ret));
-		return -1;
-	}
-
-	//if (libusb_kernel_driver_active(dev->usb, 0))
-	//	libusb_detach_kernel_driver(dev->usb, 0);
-
-	ret = libusb_claim_interface(dev->usb, 0);
-	if (ret) {
-		fprintf(stderr, "%s: %s\n", "libusb_claim_interface", libusb_strerror(ret));
-		return -1;
-	}
-
-	return 0;
 }
 
 static void

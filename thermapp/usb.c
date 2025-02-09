@@ -171,10 +171,15 @@ transfer_cb_out(struct libusb_transfer *transfer)
 	struct thermapp_usb_dev *dev = (struct thermapp_usb_dev *)transfer->user_data;
 
 	if (transfer->status == LIBUSB_TRANSFER_COMPLETED) {
+#if 0
 		int ret = libusb_submit_transfer(transfer);
 		if (ret) {
 			fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
 		}
+#else
+		libusb_free_transfer(dev->transfer_out);
+		dev->transfer_out = NULL;
+#endif
 	} else if (transfer->status == LIBUSB_TRANSFER_ERROR
 	        || transfer->status == LIBUSB_TRANSFER_NO_DEVICE
 	        || transfer->status == LIBUSB_TRANSFER_CANCELLED) {

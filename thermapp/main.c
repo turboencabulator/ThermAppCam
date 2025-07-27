@@ -148,37 +148,6 @@ main(int argc, char *argv[])
 		}
 	}
 
-	thermdev = thermapp_usb_open();
-	if (!thermdev) {
-		ret = EXIT_FAILURE;
-		goto done;
-	}
-
-	// Discard 1st frame, it usually has the header repeated twice
-	// and the data shifted into the pad by a corresponding amount.
-	union thermapp_frame frame;
-	if (thermapp_usb_thread_create(thermdev)
-	 || thermapp_usb_frame_read(thermdev, &frame, sizeof frame)) {
-		ret = EXIT_FAILURE;
-		goto done;
-	}
-
-	uint32_t serial_num = frame.header.serial_num_lo
-	                    | frame.header.serial_num_hi << 16;
-	printf("Serial number: %" PRIu32 "\n", serial_num);
-	printf("Hardware version: %" PRIu16 "\n", frame.header.hardware_ver);
-	printf("Firmware version: %" PRIu16 "\n", frame.header.firmware_ver);
-
-	thermcal = thermapp_cal_open(caldir, serial_num);
-	if (!thermcal) {
-		ret = EXIT_FAILURE;
-		goto done;
-	}
-
-	// We don't know offset and quant value for temperature.
-	// We use experimental value.
-	printf("Temperature: %f\n", (frame.header.temperature - 14336) * 0.00652);
-
 	fdwr = open(videodev, O_WRONLY);
 	if (fdwr < 0) {
 		perror("open");
@@ -186,23 +155,61 @@ main(int argc, char *argv[])
 		goto done;
 	}
 
-	if (v4l2_format_select(fdwr)) {
+	thermdev = thermapp_usb_open();
+	if (!thermdev) {
 		ret = EXIT_FAILURE;
 		goto done;
 	}
 
+	if (thermapp_usb_thread_create(thermdev)) {
+		ret = EXIT_FAILURE;
+		goto done;
+	}
+
+	union thermapp_frame frame;
+	int ident_frame = 1;
 #ifndef FRAME_RAW
 	double pre_offset_cal = 0;
 	double gain_cal = 1;
 	double offset_cal = 0;
-	int image_cal[FRAME_PIXELS];
+	int image_cal[FRAME_PIXELS] = { 0 };
 	int deadpixel_map[FRAME_PIXELS] = { 0 };
 	int autocal_frame = 50;
-
-	memset(image_cal, 0, sizeof image_cal);
-	printf("Calibrating... cover the lens!\n");
 #endif
 	while (thermapp_usb_frame_read(thermdev, &frame, sizeof frame) == 0) {
+		if (ident_frame) {
+			ident_frame -= 1;
+
+			uint32_t serial_num = frame.header.serial_num_lo
+			                    | frame.header.serial_num_hi << 16;
+			printf("Serial number: %" PRIu32 "\n", serial_num);
+			printf("Hardware version: %" PRIu16 "\n", frame.header.hardware_ver);
+			printf("Firmware version: %" PRIu16 "\n", frame.header.firmware_ver);
+
+			thermcal = thermapp_cal_open(caldir, serial_num);
+			if (!thermcal) {
+				ret = EXIT_FAILURE;
+				break;
+			}
+
+			// We don't know offset and quant value for temperature.
+			// We use experimental value.
+			printf("Temperature: %f\n", (frame.header.temperature - 14336) * 0.00652);
+
+			if (v4l2_format_select(fdwr)) {
+				ret = EXIT_FAILURE;
+				break;
+			}
+
+#ifndef FRAME_RAW
+			printf("Calibrating... cover the lens!\n");
+#endif
+
+			// Discard 1st frame, it usually has the header repeated twice
+			// and the data shifted into the pad by a corresponding amount.
+			continue;
+		}
+
 		int16_t *pixels = (int16_t *)&frame.bytes[frame.header.data_offset];
 #ifndef FRAME_RAW
 		if (autocal_frame) {
@@ -278,11 +285,11 @@ main(int argc, char *argv[])
 	}
 
 done:
-	if (fdwr >= 0)
-		close(fdwr);
 	if (thermcal)
 		thermapp_cal_close(thermcal);
 	if (thermdev)
 		thermapp_usb_close(thermdev);
+	if (fdwr >= 0)
+		close(fdwr);
 	return ret;
 }

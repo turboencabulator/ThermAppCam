@@ -68,6 +68,45 @@ format_properties(const unsigned int format,
 	return 0;
 }
 
+static int
+v4l2_format_select(int fdwr)
+{
+	struct v4l2_format vid_format;
+
+	memset(&vid_format, 0, sizeof vid_format);
+	vid_format.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+
+	if (ioctl(fdwr, VIDIOC_G_FMT, &vid_format)) {
+		perror("VIDIOC_G_FMT");
+		return -1;
+	}
+
+	vid_format.fmt.pix.width = FRAME_WIDTH;
+	vid_format.fmt.pix.height = FRAME_HEIGHT;
+	vid_format.fmt.pix.pixelformat = FRAME_FORMAT;
+	vid_format.fmt.pix.field = V4L2_FIELD_NONE;
+	vid_format.fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
+
+	size_t framesize;
+	size_t linewidth;
+	if (format_properties(vid_format.fmt.pix.pixelformat,
+	                      vid_format.fmt.pix.width, vid_format.fmt.pix.height,
+	                      &framesize,
+	                      &linewidth)) {
+		fprintf(stderr, "unable to guess correct settings for format '%d'\n", FRAME_FORMAT);
+		return -1;
+	}
+	vid_format.fmt.pix.sizeimage = framesize;
+	vid_format.fmt.pix.bytesperline = linewidth;
+
+	if (ioctl(fdwr, VIDIOC_S_FMT, &vid_format)) {
+		perror("VIDIOC_S_FMT");
+		return -1;
+	}
+
+	return 0;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -140,8 +179,6 @@ main(int argc, char *argv[])
 	// We use experimental value.
 	printf("Temperature: %f\n", (frame.header.temperature - 14336) * 0.00652);
 
-	struct v4l2_format vid_format;
-
 	fdwr = open(videodev, O_WRONLY);
 	if (fdwr < 0) {
 		perror("open");
@@ -149,36 +186,7 @@ main(int argc, char *argv[])
 		goto done;
 	}
 
-	memset(&vid_format, 0, sizeof vid_format);
-	vid_format.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-
-	if (ioctl(fdwr, VIDIOC_G_FMT, &vid_format)) {
-		perror("VIDIOC_G_FMT");
-		ret = EXIT_FAILURE;
-		goto done;
-	}
-
-	vid_format.fmt.pix.width = FRAME_WIDTH;
-	vid_format.fmt.pix.height = FRAME_HEIGHT;
-	vid_format.fmt.pix.pixelformat = FRAME_FORMAT;
-	vid_format.fmt.pix.field = V4L2_FIELD_NONE;
-	vid_format.fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
-
-	size_t framesize;
-	size_t linewidth;
-	if (format_properties(vid_format.fmt.pix.pixelformat,
-	                      vid_format.fmt.pix.width, vid_format.fmt.pix.height,
-	                      &framesize,
-	                      &linewidth)) {
-		fprintf(stderr, "unable to guess correct settings for format '%d'\n", FRAME_FORMAT);
-		ret = EXIT_FAILURE;
-		goto done;
-	}
-	vid_format.fmt.pix.sizeimage = framesize;
-	vid_format.fmt.pix.bytesperline = linewidth;
-
-	if (ioctl(fdwr, VIDIOC_S_FMT, &vid_format)) {
-		perror("VIDIOC_S_FMT");
+	if (v4l2_format_select(fdwr)) {
 		ret = EXIT_FAILURE;
 		goto done;
 	}

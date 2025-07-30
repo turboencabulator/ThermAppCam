@@ -50,84 +50,6 @@ static const struct thermapp_cfg initial_cfg = {
 	.data_1f     = 0x0fff,
 };
 
-struct thermapp_usb_dev *
-thermapp_usb_open(void)
-{
-	int ret;
-
-	struct thermapp_usb_dev *dev = calloc(1, sizeof *dev);
-	if (!dev) {
-		perror("calloc");
-		goto err;
-	}
-
-	ret = libusb_init(&dev->ctx);
-	if (ret) {
-		fprintf(stderr, "%s: %s\n", "libusb_init", libusb_strerror(ret));
-		goto err;
-	}
-
-	dev->usb = libusb_open_device_with_vid_pid(dev->ctx, VENDOR, PRODUCT);
-	if (!dev->usb) {
-		ret = LIBUSB_ERROR_NO_DEVICE;
-		fprintf(stderr, "%s: %s\n", "libusb_open_device_with_vid_pid", libusb_strerror(ret));
-		goto err;
-	}
-
-	ret = libusb_set_configuration(dev->usb, 1);
-	if (ret) {
-		fprintf(stderr, "%s: %s\n", "libusb_set_configuration", libusb_strerror(ret));
-		goto err;
-	}
-
-	//if (libusb_kernel_driver_active(dev->usb, 0))
-	//	libusb_detach_kernel_driver(dev->usb, 0);
-
-	ret = libusb_claim_interface(dev->usb, 0);
-	if (ret) {
-		fprintf(stderr, "%s: %s\n", "libusb_claim_interface", libusb_strerror(ret));
-		goto err;
-	}
-
-	dev->cfg = malloc(HEADER_SIZE);
-	if (!dev->cfg) {
-		perror("malloc");
-		goto err;
-	}
-
-	dev->frame_in = malloc(FRAME_PADDED_SIZE);
-	if (!dev->frame_in) {
-		perror("malloc");
-		goto err;
-	}
-
-	dev->frame_done = malloc(FRAME_PADDED_SIZE);
-	if (!dev->frame_done) {
-		perror("malloc");
-		goto err;
-	}
-
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-	memcpy(dev->cfg, &initial_cfg, HEADER_SIZE);
-#else
-	unsigned char *src = (unsigned char *)&initial_cfg;
-	unsigned char *dst = dev->cfg;
-	uint16_t word;
-	for (size_t i = 0; i < HEADER_SIZE; i += sizeof word) {
-		memcpy(&word, src, sizeof word);
-		word = htole16(word);
-		memcpy(dst, &word, sizeof word);
-		src += sizeof word;
-		dst += sizeof word;
-	}
-#endif
-	return dev;
-
-err:
-	thermapp_usb_close(dev);
-	return NULL;
-}
-
 static void
 cancel_async(struct thermapp_usb_dev *dev)
 {
@@ -156,16 +78,15 @@ transfer_cb_out(struct libusb_transfer *transfer)
 		int ret = libusb_submit_transfer(transfer);
 		if (ret) {
 			fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
+			transfer->buffer = NULL;
 		}
 #else
-		libusb_free_transfer(dev->transfer_out);
-		dev->transfer_out = NULL;
+		transfer->buffer = NULL;
 #endif
 	} else if (transfer->status == LIBUSB_TRANSFER_ERROR
 	        || transfer->status == LIBUSB_TRANSFER_NO_DEVICE
 	        || transfer->status == LIBUSB_TRANSFER_CANCELLED) {
-		libusb_free_transfer(dev->transfer_out);
-		dev->transfer_out = NULL;
+		transfer->buffer = NULL;
 
 		cancel_async(dev);
 	}
@@ -222,12 +143,12 @@ transfer_cb_in(struct libusb_transfer *transfer)
 		int ret = libusb_submit_transfer(transfer);
 		if (ret) {
 			fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
+			transfer->buffer = NULL;
 		}
 	} else if (transfer->status == LIBUSB_TRANSFER_ERROR
 	        || transfer->status == LIBUSB_TRANSFER_NO_DEVICE
 	        || transfer->status == LIBUSB_TRANSFER_CANCELLED) {
-		libusb_free_transfer(dev->transfer_in);
-		dev->transfer_in = NULL;
+		transfer->buffer = NULL;
 
 		cancel_async(dev);
 	}
@@ -239,7 +160,6 @@ read_async(void *ctx)
 	struct thermapp_usb_dev *dev = (struct thermapp_usb_dev *)ctx;
 	int ret;
 
-	dev->transfer_out = libusb_alloc_transfer(0);
 	libusb_fill_bulk_transfer(dev->transfer_out,
 	                          dev->usb,
 	                          LIBUSB_ENDPOINT_OUT | 2,
@@ -251,11 +171,9 @@ read_async(void *ctx)
 	ret = libusb_submit_transfer(dev->transfer_out);
 	if (ret) {
 		fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
-		libusb_free_transfer(dev->transfer_out);
-		dev->transfer_out = NULL;
+		dev->transfer_out->buffer = NULL;
 	}
 
-	dev->transfer_in = libusb_alloc_transfer(0);
 	libusb_fill_bulk_transfer(dev->transfer_in,
 	                          dev->usb,
 	                          LIBUSB_ENDPOINT_IN | 1,
@@ -267,11 +185,11 @@ read_async(void *ctx)
 	ret = libusb_submit_transfer(dev->transfer_in);
 	if (ret) {
 		fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
-		libusb_free_transfer(dev->transfer_in);
-		dev->transfer_in = NULL;
+		dev->transfer_in->buffer = NULL;
 	}
 
-	while (dev->transfer_out || dev->transfer_in) {
+	// Using transfer->buffer as an indication that transfers are pending.
+	while (dev->transfer_out->buffer || dev->transfer_in->buffer) {
 		ret = libusb_handle_events(dev->ctx);
 		if (ret) {
 			fprintf(stderr, "%s: %s\n", "libusb_handle_events", libusb_strerror(ret));
@@ -283,12 +201,104 @@ read_async(void *ctx)
 		}
 	}
 
-	// All transfers cancelled.  Wake all waiters so they can exit.
+	// All transfers completed or cancelled.  Wake all waiters so they can exit.
 	pthread_mutex_lock(&dev->mutex_frame_swap);
 	dev->read_async_completed = 1;
 	pthread_cond_broadcast(&dev->cond_frame_ready);
 	pthread_mutex_unlock(&dev->mutex_frame_swap);
 
+	return NULL;
+}
+
+struct thermapp_usb_dev *
+thermapp_usb_open(void)
+{
+	int ret;
+
+	struct thermapp_usb_dev *dev = calloc(1, sizeof *dev);
+	if (!dev) {
+		perror("calloc");
+		goto err;
+	}
+
+	ret = libusb_init(&dev->ctx);
+	if (ret) {
+		fprintf(stderr, "%s: %s\n", "libusb_init", libusb_strerror(ret));
+		goto err;
+	}
+
+	dev->usb = libusb_open_device_with_vid_pid(dev->ctx, VENDOR, PRODUCT);
+	if (!dev->usb) {
+		ret = LIBUSB_ERROR_NO_DEVICE;
+		fprintf(stderr, "%s: %s\n", "libusb_open_device_with_vid_pid", libusb_strerror(ret));
+		goto err;
+	}
+
+	ret = libusb_set_configuration(dev->usb, 1);
+	if (ret) {
+		fprintf(stderr, "%s: %s\n", "libusb_set_configuration", libusb_strerror(ret));
+		goto err;
+	}
+
+	//if (libusb_kernel_driver_active(dev->usb, 0))
+	//	libusb_detach_kernel_driver(dev->usb, 0);
+
+	ret = libusb_claim_interface(dev->usb, 0);
+	if (ret) {
+		fprintf(stderr, "%s: %s\n", "libusb_claim_interface", libusb_strerror(ret));
+		goto err;
+	}
+
+	dev->transfer_out = libusb_alloc_transfer(0);
+	if (!dev->transfer_out) {
+		ret = LIBUSB_ERROR_NO_MEM;
+		fprintf(stderr, "%s: %s\n", "libusb_alloc_transfer", libusb_strerror(ret));
+		goto err;
+	}
+
+	dev->transfer_in = libusb_alloc_transfer(0);
+	if (!dev->transfer_in) {
+		ret = LIBUSB_ERROR_NO_MEM;
+		fprintf(stderr, "%s: %s\n", "libusb_alloc_transfer", libusb_strerror(ret));
+		goto err;
+	}
+
+	dev->cfg = malloc(HEADER_SIZE);
+	if (!dev->cfg) {
+		perror("malloc");
+		goto err;
+	}
+
+	dev->frame_in = malloc(FRAME_PADDED_SIZE);
+	if (!dev->frame_in) {
+		perror("malloc");
+		goto err;
+	}
+
+	dev->frame_done = malloc(FRAME_PADDED_SIZE);
+	if (!dev->frame_done) {
+		perror("malloc");
+		goto err;
+	}
+
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+	memcpy(dev->cfg, &initial_cfg, HEADER_SIZE);
+#else
+	unsigned char *src = (unsigned char *)&initial_cfg;
+	unsigned char *dst = dev->cfg;
+	uint16_t word;
+	for (size_t i = 0; i < HEADER_SIZE; i += sizeof word) {
+		memcpy(&word, src, sizeof word);
+		word = htole16(word);
+		memcpy(dst, &word, sizeof word);
+		src += sizeof word;
+		dst += sizeof word;
+	}
+#endif
+	return dev;
+
+err:
+	thermapp_usb_close(dev);
 	return NULL;
 }
 
@@ -360,6 +370,9 @@ thermapp_usb_close(struct thermapp_usb_dev *dev)
 	if (dev->read_async_started) {
 		pthread_join(dev->pthread_read_async, NULL);
 	}
+
+	libusb_free_transfer(dev->transfer_out);
+	libusb_free_transfer(dev->transfer_in);
 
 	if (dev->usb) {
 		libusb_release_interface(dev->usb, 0);

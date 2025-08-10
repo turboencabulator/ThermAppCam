@@ -322,18 +322,19 @@ thermapp_usb_thread_create(struct thermapp_usb_dev *dev)
 	return 0;
 }
 
-int
+size_t
 thermapp_usb_frame_read(struct thermapp_usb_dev *dev, void *buf, size_t len)
 {
-	int ret = 0;
+	if (len > FRAME_PADDED_SIZE) {
+		len = FRAME_PADDED_SIZE;
+	}
+	len &= ~(sizeof (uint16_t) - 1);
 
 	pthread_mutex_lock(&dev->mutex_frame_swap);
 	pthread_cond_wait(&dev->cond_frame_ready, &dev->mutex_frame_swap);
 
-	if (dev->read_async_completed
-	 || len > FRAME_PADDED_SIZE
-	 || len % sizeof (uint16_t)) {
-		ret = -1;
+	if (dev->read_async_completed) {
+		len = 0;
 	} else {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 		memcpy(buf, dev->frame_done, len);
@@ -356,7 +357,7 @@ thermapp_usb_frame_read(struct thermapp_usb_dev *dev, void *buf, size_t len)
 
 	pthread_mutex_unlock(&dev->mutex_frame_swap);
 
-	return ret;
+	return len;
 }
 
 void

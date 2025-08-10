@@ -176,7 +176,7 @@ main(int argc, char *argv[])
 	int deadpixel_map[FRAME_PIXELS] = { 0 };
 	int autocal_frame = 50;
 #endif
-	while (thermapp_usb_frame_read(thermdev, &frame, sizeof frame) == 0) {
+	while (thermapp_usb_frame_read(thermdev, &frame, sizeof frame)) {
 		if (ident_frame) {
 			ident_frame -= 1;
 

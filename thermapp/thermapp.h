@@ -104,7 +104,7 @@ struct thermapp_cal {
 
 struct thermapp_usb_dev *thermapp_usb_open(void);
 int thermapp_usb_thread_create(struct thermapp_usb_dev *);
-int thermapp_usb_frame_read(struct thermapp_usb_dev *, void *, size_t);
+size_t thermapp_usb_frame_read(struct thermapp_usb_dev *, void *, size_t);
 void thermapp_usb_close(struct thermapp_usb_dev *);
 
 struct thermapp_cal *thermapp_cal_open(const char *, uint32_t);

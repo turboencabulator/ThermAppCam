@@ -146,28 +146,14 @@ read_async(void *ctx)
 	struct thermapp_usb_dev *dev = (struct thermapp_usb_dev *)ctx;
 	int ret;
 
-	libusb_fill_bulk_transfer(dev->transfer_out,
-	                          dev->usb,
-	                          LIBUSB_ENDPOINT_OUT | 2,
-	                          dev->cfg,
-	                          HEADER_SIZE,
-	                          transfer_cb_out,
-	                          dev,
-	                          0);
+	dev->transfer_out->buffer = dev->cfg;
 	ret = libusb_submit_transfer(dev->transfer_out);
 	if (ret) {
 		fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
 		dev->transfer_out->buffer = NULL;
 	}
 
-	libusb_fill_bulk_transfer(dev->transfer_in,
-	                          dev->usb,
-	                          LIBUSB_ENDPOINT_IN | 1,
-	                          dev->frame_in,
-	                          TRANSFER_SIZE,
-	                          transfer_cb_in,
-	                          (void *)dev,
-	                          0);
+	dev->transfer_in->buffer = dev->frame_in;
 	ret = libusb_submit_transfer(dev->transfer_in);
 	if (ret) {
 		fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
@@ -241,6 +227,14 @@ thermapp_usb_open(void)
 		fprintf(stderr, "%s: %s\n", "libusb_alloc_transfer", libusb_strerror(ret));
 		goto err;
 	}
+	libusb_fill_bulk_transfer(dev->transfer_out,
+	                          dev->usb,
+	                          LIBUSB_ENDPOINT_OUT | 2,
+	                          NULL, //dev->cfg,
+	                          HEADER_SIZE,
+	                          transfer_cb_out,
+	                          dev,
+	                          0);
 
 	dev->transfer_in = libusb_alloc_transfer(0);
 	if (!dev->transfer_in) {
@@ -248,6 +242,14 @@ thermapp_usb_open(void)
 		fprintf(stderr, "%s: %s\n", "libusb_alloc_transfer", libusb_strerror(ret));
 		goto err;
 	}
+	libusb_fill_bulk_transfer(dev->transfer_in,
+	                          dev->usb,
+	                          LIBUSB_ENDPOINT_IN | 1,
+	                          NULL, //dev->frame_in,
+	                          TRANSFER_SIZE,
+	                          transfer_cb_in,
+	                          (void *)dev,
+	                          0);
 
 	dev->cfg = malloc(HEADER_SIZE);
 	if (!dev->cfg) {

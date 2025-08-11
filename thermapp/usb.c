@@ -73,7 +73,10 @@ transfer_cb_out(struct libusb_transfer *transfer)
 {
 	struct thermapp_usb_dev *dev = (struct thermapp_usb_dev *)transfer->user_data;
 
+	pthread_mutex_lock(&dev->mutex_cfg_write);
 	transfer->buffer = NULL;
+	pthread_cond_broadcast(&dev->cond_cfg_sent);
+	pthread_mutex_unlock(&dev->mutex_cfg_write);
 
 	if (transfer->status != LIBUSB_TRANSFER_COMPLETED) {
 		cancel_async(dev);
@@ -146,12 +149,7 @@ read_async(void *ctx)
 	struct thermapp_usb_dev *dev = (struct thermapp_usb_dev *)ctx;
 	int ret;
 
-	dev->transfer_out->buffer = dev->cfg;
-	ret = libusb_submit_transfer(dev->transfer_out);
-	if (ret) {
-		fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
-		dev->transfer_out->buffer = NULL;
-	}
+	thermapp_usb_cfg_write(dev, &initial_cfg, 0, sizeof initial_cfg);
 
 	dev->transfer_in->buffer = dev->frame_in;
 	ret = libusb_submit_transfer(dev->transfer_in);
@@ -174,10 +172,9 @@ read_async(void *ctx)
 	}
 
 	// All transfers completed or cancelled.  Wake all waiters so they can exit.
-	pthread_mutex_lock(&dev->mutex_frame_swap);
 	dev->read_async_completed = 1;
 	pthread_cond_broadcast(&dev->cond_frame_ready);
-	pthread_mutex_unlock(&dev->mutex_frame_swap);
+	pthread_cond_broadcast(&dev->cond_cfg_sent);
 
 	return NULL;
 }
@@ -269,20 +266,6 @@ thermapp_usb_open(void)
 		goto err;
 	}
 
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-	memcpy(dev->cfg, &initial_cfg, HEADER_SIZE);
-#else
-	unsigned char *src = (unsigned char *)&initial_cfg;
-	unsigned char *dst = dev->cfg;
-	uint16_t word;
-	for (size_t i = 0; i < HEADER_SIZE; i += sizeof word) {
-		memcpy(&word, src, sizeof word);
-		word = htole16(word);
-		memcpy(dst, &word, sizeof word);
-		src += sizeof word;
-		dst += sizeof word;
-	}
-#endif
 	return dev;
 
 err:
@@ -298,6 +281,8 @@ thermapp_usb_thread_create(struct thermapp_usb_dev *dev)
 
 	dev->cond_frame_ready = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
 	dev->mutex_frame_swap = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+	dev->cond_cfg_sent = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
+	dev->mutex_cfg_write = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 	dev->read_async_completed = 0;
 
 	ret = pthread_create(&dev->pthread_read_async, NULL, read_async, (void *)dev);
@@ -344,8 +329,55 @@ thermapp_usb_frame_read(struct thermapp_usb_dev *dev, void *buf, size_t len)
 	}
 
 	pthread_mutex_unlock(&dev->mutex_frame_swap);
-
 	return len;
+}
+
+size_t
+thermapp_usb_cfg_write(struct thermapp_usb_dev *dev, const void *buf, size_t ofs, size_t len)
+{
+	if (ofs >= HEADER_SIZE
+	 || len > HEADER_SIZE - ofs
+	 || ofs & (sizeof (uint16_t) - 1)
+	 || len & (sizeof (uint16_t) - 1)) {
+		return 0;
+	}
+
+	pthread_mutex_lock(&dev->mutex_cfg_write);
+	while (dev->transfer_out->buffer) {
+		pthread_cond_wait(&dev->cond_cfg_sent, &dev->mutex_cfg_write);
+	}
+
+	if (len) {
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+		memcpy(dev->cfg + ofs, buf, len);
+#else
+		// This assumes ofs and len are always even
+		// TODO: Make it the caller's responsibility to handle endianness?
+		unsigned char *src = buf;
+		unsigned char *dst = dev->cfg + ofs;
+		uint16_t word;
+		for (size_t i = 0; i < len; i += sizeof word) {
+			memcpy(&word, src, sizeof word);
+			word = htole16(word);
+			memcpy(dst, &word, sizeof word);
+			src += sizeof word;
+			dst += sizeof word;
+		}
+#endif
+	}
+
+	// TODO: Fix race between new submission and thread exit
+	if (!dev->read_async_completed) {
+		dev->transfer_out->buffer = dev->cfg;
+		int ret = libusb_submit_transfer(dev->transfer_out);
+		if (ret) {
+			fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
+			dev->transfer_out->buffer = NULL;
+		}
+	}
+
+	pthread_mutex_unlock(&dev->mutex_cfg_write);
+	return HEADER_SIZE;
 }
 
 void

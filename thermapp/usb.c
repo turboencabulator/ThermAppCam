@@ -51,7 +51,7 @@ static const struct thermapp_cfg initial_cfg = {
 };
 
 static void
-cancel_async(struct thermapp_usb_dev *dev)
+cancel_transfers(struct thermapp_usb_dev *dev)
 {
 	if (dev->transfer_in) {
 		int ret = libusb_cancel_transfer(dev->transfer_in);
@@ -73,13 +73,10 @@ transfer_cb_out(struct libusb_transfer *transfer)
 {
 	struct thermapp_usb_dev *dev = (struct thermapp_usb_dev *)transfer->user_data;
 
-	pthread_mutex_lock(&dev->mutex_cfg_write);
 	transfer->buffer = NULL;
-	pthread_cond_broadcast(&dev->cond_cfg_sent);
-	pthread_mutex_unlock(&dev->mutex_cfg_write);
 
 	if (transfer->status != LIBUSB_TRANSFER_COMPLETED) {
-		cancel_async(dev);
+		cancel_transfers(dev);
 	}
 }
 
@@ -113,14 +110,10 @@ transfer_cb_in(struct libusb_transfer *transfer)
 
 			if (len == FRAME_PADDED_SIZE) {
 				// Frame complete.
-				pthread_mutex_lock(&dev->mutex_frame_swap);
-				unsigned char *tmp = dev->frame_done;
+				transfer->buffer = dev->frame_done;
 				dev->frame_done = dev->frame_in;
-				dev->frame_in = tmp;
-				pthread_cond_broadcast(&dev->cond_frame_ready);
-				pthread_mutex_unlock(&dev->mutex_frame_swap);
-
-				transfer->buffer = dev->frame_in;
+				dev->frame_in = transfer->buffer;
+				dev->frame_available = 1;
 				len = 0;
 			}
 
@@ -138,45 +131,8 @@ transfer_cb_in(struct libusb_transfer *transfer)
 		}
 	} else {
 		transfer->buffer = NULL;
-
-		cancel_async(dev);
+		cancel_transfers(dev);
 	}
-}
-
-static void *
-read_async(void *ctx)
-{
-	struct thermapp_usb_dev *dev = (struct thermapp_usb_dev *)ctx;
-	int ret;
-
-	thermapp_usb_cfg_write(dev, &initial_cfg, 0, sizeof initial_cfg);
-
-	dev->transfer_in->buffer = dev->frame_in;
-	ret = libusb_submit_transfer(dev->transfer_in);
-	if (ret) {
-		fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
-		dev->transfer_in->buffer = NULL;
-	}
-
-	// Using transfer->buffer as an indication that transfers are pending.
-	while (dev->transfer_out->buffer || dev->transfer_in->buffer) {
-		ret = libusb_handle_events(dev->ctx);
-		if (ret) {
-			fprintf(stderr, "%s: %s\n", "libusb_handle_events", libusb_strerror(ret));
-			if (ret == LIBUSB_ERROR_INTERRUPTED) /* stray signal */ {
-				continue;
-			} else {
-				break;
-			}
-		}
-	}
-
-	// All transfers completed or cancelled.  Wake all waiters so they can exit.
-	dev->read_async_completed = 1;
-	pthread_cond_broadcast(&dev->cond_frame_ready);
-	pthread_cond_broadcast(&dev->cond_cfg_sent);
-
-	return NULL;
 }
 
 struct thermapp_usb_dev *
@@ -273,26 +229,31 @@ err:
 	return NULL;
 }
 
-// Create read and write thread
-int
-thermapp_usb_thread_create(struct thermapp_usb_dev *dev)
+void
+thermapp_usb_start(struct thermapp_usb_dev *dev)
 {
-	int ret;
+	dev->transfer_in->buffer = dev->frame_in;
+	dev->transfer_in->status = LIBUSB_TRANSFER_COMPLETED;
+	dev->transfer_in->actual_length = 0;
+	transfer_cb_in(dev->transfer_in);
 
-	dev->cond_frame_ready = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
-	dev->mutex_frame_swap = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
-	dev->cond_cfg_sent = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
-	dev->mutex_cfg_write = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
-	dev->read_async_completed = 0;
+	thermapp_usb_cfg_write(dev, &initial_cfg, 0, sizeof initial_cfg);
+}
 
-	ret = pthread_create(&dev->pthread_read_async, NULL, read_async, (void *)dev);
+int
+thermapp_usb_transfers_pending(struct thermapp_usb_dev *dev)
+{
+	// Using transfer->buffer as an indication that transfers are pending.
+	return dev->transfer_out->buffer || dev->transfer_in->buffer;
+}
+
+void
+thermapp_usb_handle_events(struct thermapp_usb_dev *dev)
+{
+	int ret = libusb_handle_events(dev->ctx);
 	if (ret) {
-		fprintf(stderr, "%s: %s\n", "pthread_create", strerror(ret));
-		return -1;
+		fprintf(stderr, "%s: %s\n", "libusb_handle_events", libusb_strerror(ret));
 	}
-	dev->read_async_started = 1;
-
-	return 0;
 }
 
 size_t
@@ -303,12 +264,8 @@ thermapp_usb_frame_read(struct thermapp_usb_dev *dev, void *buf, size_t len)
 	}
 	len &= ~(sizeof (uint16_t) - 1);
 
-	pthread_mutex_lock(&dev->mutex_frame_swap);
-	pthread_cond_wait(&dev->cond_frame_ready, &dev->mutex_frame_swap);
-
-	if (dev->read_async_completed) {
-		len = 0;
-	} else {
+	if (len && dev->frame_available) {
+		dev->frame_available = 0;
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 		memcpy(buf, dev->frame_done, len);
 #else
@@ -326,9 +283,10 @@ thermapp_usb_frame_read(struct thermapp_usb_dev *dev, void *buf, size_t len)
 			dst += sizeof word;
 		}
 #endif
+	} else {
+		len = 0;
 	}
 
-	pthread_mutex_unlock(&dev->mutex_frame_swap);
 	return len;
 }
 
@@ -342,9 +300,9 @@ thermapp_usb_cfg_write(struct thermapp_usb_dev *dev, const void *buf, size_t ofs
 		return 0;
 	}
 
-	pthread_mutex_lock(&dev->mutex_cfg_write);
-	while (dev->transfer_out->buffer) {
-		pthread_cond_wait(&dev->cond_cfg_sent, &dev->mutex_cfg_write);
+	// TODO: Double-buffer the writes.  Consider merging all writes until triggered to send.
+	if (dev->transfer_out->buffer) {
+		return 0;
 	}
 
 	if (len) {
@@ -366,17 +324,13 @@ thermapp_usb_cfg_write(struct thermapp_usb_dev *dev, const void *buf, size_t ofs
 #endif
 	}
 
-	// TODO: Fix race between new submission and thread exit
-	if (!dev->read_async_completed) {
-		dev->transfer_out->buffer = dev->cfg;
-		int ret = libusb_submit_transfer(dev->transfer_out);
-		if (ret) {
-			fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
-			dev->transfer_out->buffer = NULL;
-		}
+	dev->transfer_out->buffer = dev->cfg;
+	int ret = libusb_submit_transfer(dev->transfer_out);
+	if (ret) {
+		fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
+		dev->transfer_out->buffer = NULL;
 	}
 
-	pthread_mutex_unlock(&dev->mutex_cfg_write);
 	return HEADER_SIZE;
 }
 
@@ -385,12 +339,6 @@ thermapp_usb_close(struct thermapp_usb_dev *dev)
 {
 	if (!dev)
 		return;
-
-	cancel_async(dev);
-
-	if (dev->read_async_started) {
-		pthread_join(dev->pthread_read_async, NULL);
-	}
 
 	libusb_free_transfer(dev->transfer_out);
 	libusb_free_transfer(dev->transfer_in);

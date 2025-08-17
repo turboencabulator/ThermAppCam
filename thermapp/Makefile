@@ -3,7 +3,7 @@
 
 CC = gcc
 CFLAGS = -g -O2 -Wall $(shell pkg-config --cflags libusb-1.0)
-LDFLAGS = $(shell pkg-config --libs libusb-1.0) -lpthread
+LDFLAGS = $(shell pkg-config --libs libusb-1.0)
 
 prefix = /usr/local
 exec_prefix = $(prefix)

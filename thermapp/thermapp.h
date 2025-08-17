@@ -6,7 +6,6 @@
 #define THERMAPP_H
 
 #include <libusb.h>
-#include <pthread.h>
 #include <stdint.h>
 
 #define VENDOR  0x1772
@@ -79,17 +78,10 @@ struct thermapp_usb_dev {
 	struct libusb_transfer *transfer_in;
 	struct libusb_transfer *transfer_out;
 
-	int read_async_started;
-	int read_async_completed;
-	pthread_t pthread_read_async;
-	pthread_mutex_t mutex_frame_swap;
-	pthread_cond_t cond_frame_ready;
-	pthread_mutex_t mutex_cfg_write;
-	pthread_cond_t cond_cfg_sent;
-
 	unsigned char *cfg;
 	unsigned char *frame_in;
 	unsigned char *frame_done;
+	int frame_available;
 };
 
 struct thermapp_cal {
@@ -105,7 +97,9 @@ struct thermapp_cal {
 
 
 struct thermapp_usb_dev *thermapp_usb_open(void);
-int thermapp_usb_thread_create(struct thermapp_usb_dev *);
+void thermapp_usb_start(struct thermapp_usb_dev *);
+int thermapp_usb_transfers_pending(struct thermapp_usb_dev *);
+void thermapp_usb_handle_events(struct thermapp_usb_dev *);
 size_t thermapp_usb_frame_read(struct thermapp_usb_dev *, void *, size_t);
 size_t thermapp_usb_cfg_write(struct thermapp_usb_dev *, const void *, size_t, size_t);
 void thermapp_usb_close(struct thermapp_usb_dev *);

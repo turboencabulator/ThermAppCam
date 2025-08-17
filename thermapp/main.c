@@ -161,11 +161,6 @@ main(int argc, char *argv[])
 		goto done;
 	}
 
-	if (thermapp_usb_thread_create(thermdev)) {
-		ret = EXIT_FAILURE;
-		goto done;
-	}
-
 	union thermapp_frame frame;
 	int ident_frame = 1;
 #ifndef FRAME_RAW
@@ -176,7 +171,14 @@ main(int argc, char *argv[])
 	int deadpixel_map[FRAME_PIXELS] = { 0 };
 	int autocal_frame = 50;
 #endif
-	while (thermapp_usb_frame_read(thermdev, &frame, sizeof frame)) {
+	thermapp_usb_start(thermdev);
+	while (thermapp_usb_transfers_pending(thermdev)) {
+		thermapp_usb_handle_events(thermdev);
+
+		if (!thermapp_usb_frame_read(thermdev, &frame, sizeof frame)) {
+			continue;
+		}
+
 		if (ident_frame) {
 			ident_frame -= 1;
 

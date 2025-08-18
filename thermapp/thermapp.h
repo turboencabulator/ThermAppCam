@@ -78,9 +78,11 @@ struct thermapp_usb_dev {
 	struct libusb_transfer *transfer_in;
 	struct libusb_transfer *transfer_out;
 
-	unsigned char *cfg;
+	unsigned char *cfg_fill;
+	unsigned char *cfg_out;
 	unsigned char *frame_in;
 	unsigned char *frame_done;
+	int cfg_complete;
 	int frame_available;
 };
 

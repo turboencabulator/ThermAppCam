@@ -73,9 +73,25 @@ transfer_cb_out(struct libusb_transfer *transfer)
 {
 	struct thermapp_usb_dev *dev = (struct thermapp_usb_dev *)transfer->user_data;
 
-	transfer->buffer = NULL;
+	if (transfer->status == LIBUSB_TRANSFER_COMPLETED) {
+		if (dev->cfg_complete) {
+			memcpy(dev->cfg_out, dev->cfg_fill, HEADER_SIZE);
 
-	if (transfer->status != LIBUSB_TRANSFER_COMPLETED) {
+			transfer->buffer = dev->cfg_fill;
+			dev->cfg_fill = dev->cfg_out;
+			dev->cfg_out = transfer->buffer;
+			dev->cfg_complete = 0;
+
+			int ret = libusb_submit_transfer(transfer);
+			if (ret) {
+				fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
+				transfer->buffer = NULL;
+			}
+		} else {
+			transfer->buffer = NULL;
+		}
+	} else {
+		transfer->buffer = NULL;
 		cancel_transfers(dev);
 	}
 }
@@ -146,6 +162,30 @@ thermapp_usb_open(void)
 		goto err;
 	}
 
+	dev->cfg_fill = malloc(HEADER_SIZE);
+	if (!dev->cfg_fill) {
+		perror("malloc");
+		goto err;
+	}
+
+	dev->cfg_out = malloc(HEADER_SIZE);
+	if (!dev->cfg_out) {
+		perror("malloc");
+		goto err;
+	}
+
+	dev->frame_in = malloc(FRAME_PADDED_SIZE);
+	if (!dev->frame_in) {
+		perror("malloc");
+		goto err;
+	}
+
+	dev->frame_done = malloc(FRAME_PADDED_SIZE);
+	if (!dev->frame_done) {
+		perror("malloc");
+		goto err;
+	}
+
 	ret = libusb_init(&dev->ctx);
 	if (ret) {
 		fprintf(stderr, "%s: %s\n", "libusb_init", libusb_strerror(ret));
@@ -183,7 +223,7 @@ thermapp_usb_open(void)
 	libusb_fill_bulk_transfer(dev->transfer_out,
 	                          dev->usb,
 	                          LIBUSB_ENDPOINT_OUT | 2,
-	                          NULL, //dev->cfg,
+	                          NULL, //dev->cfg_out,
 	                          HEADER_SIZE,
 	                          transfer_cb_out,
 	                          dev,
@@ -203,24 +243,6 @@ thermapp_usb_open(void)
 	                          transfer_cb_in,
 	                          (void *)dev,
 	                          0);
-
-	dev->cfg = malloc(HEADER_SIZE);
-	if (!dev->cfg) {
-		perror("malloc");
-		goto err;
-	}
-
-	dev->frame_in = malloc(FRAME_PADDED_SIZE);
-	if (!dev->frame_in) {
-		perror("malloc");
-		goto err;
-	}
-
-	dev->frame_done = malloc(FRAME_PADDED_SIZE);
-	if (!dev->frame_done) {
-		perror("malloc");
-		goto err;
-	}
 
 	return dev;
 
@@ -300,19 +322,15 @@ thermapp_usb_cfg_write(struct thermapp_usb_dev *dev, const void *buf, size_t ofs
 		return 0;
 	}
 
-	// TODO: Double-buffer the writes.  Consider merging all writes until triggered to send.
-	if (dev->transfer_out->buffer) {
-		return 0;
-	}
-
 	if (len) {
+		dev->cfg_complete = 0;
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-		memcpy(dev->cfg + ofs, buf, len);
+		memcpy(dev->cfg_fill + ofs, buf, len);
 #else
 		// This assumes ofs and len are always even
 		// TODO: Make it the caller's responsibility to handle endianness?
 		unsigned char *src = buf;
-		unsigned char *dst = dev->cfg + ofs;
+		unsigned char *dst = dev->cfg_fill + ofs;
 		uint16_t word;
 		for (size_t i = 0; i < len; i += sizeof word) {
 			memcpy(&word, src, sizeof word);
@@ -324,11 +342,13 @@ thermapp_usb_cfg_write(struct thermapp_usb_dev *dev, const void *buf, size_t ofs
 #endif
 	}
 
-	dev->transfer_out->buffer = dev->cfg;
-	int ret = libusb_submit_transfer(dev->transfer_out);
-	if (ret) {
-		fprintf(stderr, "%s: %s\n", "libusb_submit_transfer", libusb_strerror(ret));
-		dev->transfer_out->buffer = NULL;
+	if (!len || len == HEADER_SIZE) {
+		// Partial writes are buffered until completed with a 0-length write.
+		dev->cfg_complete = 1;
+		if (!dev->transfer_out->buffer) {
+			dev->transfer_out->status = LIBUSB_TRANSFER_COMPLETED;
+			transfer_cb_out(dev->transfer_out);
+		}
 	}
 
 	return HEADER_SIZE;
@@ -354,6 +374,7 @@ thermapp_usb_close(struct thermapp_usb_dev *dev)
 
 	free(dev->frame_done);
 	free(dev->frame_in);
-	free(dev->cfg);
+	free(dev->cfg_out);
+	free(dev->cfg_fill);
 	free(dev);
 }

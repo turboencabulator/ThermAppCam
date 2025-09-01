@@ -40,8 +40,8 @@ struct thermapp_cfg {
 	uint16_t modes;// 0xXXXM  Modes set last nibble
 	uint16_t serial_num_lo;
 	uint16_t serial_num_hi;
-	uint16_t hardware_ver;
-	uint16_t firmware_ver;
+	uint16_t hardware_num;
+	uint16_t firmware_num;
 	uint16_t fpa_h;
 	uint16_t fpa_w;
 	uint16_t data_0b;
@@ -88,6 +88,8 @@ struct thermapp_usb_dev {
 
 struct thermapp_cal {
 	uint32_t serial_num;
+	uint16_t hardware_num;
+	uint16_t firmware_num;
 
 	char *path_buf;
 	char *leaf_ptr;
@@ -106,7 +108,7 @@ size_t thermapp_usb_frame_read(struct thermapp_usb_dev *, void *, size_t);
 size_t thermapp_usb_cfg_write(struct thermapp_usb_dev *, const void *, size_t, size_t);
 void thermapp_usb_close(struct thermapp_usb_dev *);
 
-struct thermapp_cal *thermapp_cal_open(const char *, uint32_t);
+struct thermapp_cal *thermapp_cal_open(const char *, const struct thermapp_cfg *);
 void thermapp_cal_close(struct thermapp_cal *);
 
 #endif /* THERMAPP_H */

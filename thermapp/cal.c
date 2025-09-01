@@ -89,7 +89,7 @@ err:
 }
 
 struct thermapp_cal *
-thermapp_cal_open(const char *dir, uint32_t serial_num)
+thermapp_cal_open(const char *dir, const struct thermapp_cfg *header)
 {
 	struct thermapp_cal *cal = calloc(1, sizeof *cal);
 	if (!cal) {
@@ -97,7 +97,13 @@ thermapp_cal_open(const char *dir, uint32_t serial_num)
 		return cal;
 	}
 
-	cal->serial_num = serial_num;
+	cal->serial_num   = header->serial_num_lo
+	                  | header->serial_num_hi << 16;
+	cal->hardware_num = header->hardware_num;
+	cal->firmware_num = header->firmware_num;
+	if (cal->firmware_num == 256) {
+		cal->firmware_num = 7; // ???
+	}
 
 	// Everything beyond this point is optional.
 	// Caller is responsible for handling missing data.
@@ -113,7 +119,7 @@ thermapp_cal_open(const char *dir, uint32_t serial_num)
 	const char *longest_leaf = "11.bin";
 	char *path_buf;
 	int path_len, stem_len;
-	path_len = snprintf(NULL, 0, format, dir, serial_num, longest_leaf);
+	path_len = snprintf(NULL, 0, format, dir, cal->serial_num, longest_leaf);
 	if (path_len <= 0) {
 		return cal;
 	}
@@ -123,7 +129,7 @@ thermapp_cal_open(const char *dir, uint32_t serial_num)
 		perror("malloc");
 		return cal;
 	}
-	stem_len = snprintf(path_buf, path_len, format, dir, serial_num, "");
+	stem_len = snprintf(path_buf, path_len, format, dir, cal->serial_num, "");
 	if (stem_len <= 0) {
 		free(path_buf);
 		return cal;

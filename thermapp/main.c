@@ -182,17 +182,15 @@ main(int argc, char *argv[])
 		if (ident_frame) {
 			ident_frame -= 1;
 
-			uint32_t serial_num = frame.header.serial_num_lo
-			                    | frame.header.serial_num_hi << 16;
-			printf("Serial number: %" PRIu32 "\n", serial_num);
-			printf("Hardware version: %" PRIu16 "\n", frame.header.hardware_ver);
-			printf("Firmware version: %" PRIu16 "\n", frame.header.firmware_ver);
-
-			thermcal = thermapp_cal_open(caldir, serial_num);
+			thermcal = thermapp_cal_open(caldir, &frame.header);
 			if (!thermcal) {
 				ret = EXIT_FAILURE;
 				break;
 			}
+
+			printf("Serial number: %" PRIu32 "\n", thermcal->serial_num);
+			printf("Hardware number: %" PRIu16 "\n", thermcal->hardware_num);
+			printf("Firmware number: %" PRIu16 "\n", thermcal->firmware_num);
 
 			// We don't know offset and quant value for temperature.
 			// We use experimental value.

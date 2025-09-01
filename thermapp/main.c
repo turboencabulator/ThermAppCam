@@ -196,7 +196,7 @@ main(int argc, char *argv[])
 
 			// We don't know offset and quant value for temperature.
 			// We use experimental value.
-			printf("Temperature: %f\n", (frame.header.temperature - 14336) * 0.00652);
+			printf("Temperature: %f\n", (frame.header.temp_fpa_diode - 14336) * 0.00652);
 
 			if (v4l2_format_select(fdwr)) {
 				ret = EXIT_FAILURE;

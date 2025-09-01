@@ -47,8 +47,8 @@ struct thermapp_cfg {
 	uint16_t data_0b;
 	uint16_t data_0c;
 	uint16_t data_0d;
-	uint16_t data_0e;
-	int16_t temperature;
+	int16_t  temp_thermistor;
+	uint16_t temp_fpa_diode;
 	uint16_t VoutA; //DCoffset;// AD5628 VoutA, Range: 0V - 2.45V, max 2048
 	uint16_t data_11;
 	uint16_t VoutC;//gain;// AD5628 VoutC, Range: 0V - 3.59V, max 2984 ??????

@@ -15,7 +15,7 @@ static const unsigned char preamble[] = {
 };
 
 // These are host-endian, must be converted to little-endian before transfer
-static const struct thermapp_cfg initial_cfg = {
+static const union thermapp_cfg initial_cfg = {
 	.preamble[0] = 0xa5a5,
 	.preamble[1] = 0xa5a5,
 	.preamble[2] = 0xa5a5,

@@ -35,40 +35,43 @@
 
 // AD5628 DAC in Therm App is for generating control voltage
 // VREF = 2.5 volts 11 Bit
-struct thermapp_cfg {
-	uint16_t preamble[4];
-	uint16_t modes;// 0xXXXM  Modes set last nibble
-	uint16_t serial_num_lo;
-	uint16_t serial_num_hi;
-	uint16_t hardware_num;
-	uint16_t firmware_num;
-	uint16_t fpa_h;
-	uint16_t fpa_w;
-	uint16_t data_0b;
-	uint16_t data_0c;
-	uint16_t data_0d;
-	int16_t  temp_thermistor;
-	uint16_t temp_fpa_diode;
-	uint16_t VoutA; //DCoffset;// AD5628 VoutA, Range: 0V - 2.45V, max 2048
-	uint16_t data_11;
-	uint16_t VoutC;//gain;// AD5628 VoutC, Range: 0V - 3.59V, max 2984 ??????
-	uint16_t VoutD;// AD5628 VoutD, Range: 0V - 2.895V, max 2394 ??????
-	uint16_t VoutE;// AD5628 VoutE, Range: 0V - 3.63V, max 2997, FPA VBUS
-	uint16_t data_15;
-	uint16_t data_16;
-	uint16_t data_17;
-	uint16_t data_18;
-	uint16_t data_offset; // or header_size?
-	uint16_t frame_count;
-	uint16_t data_1b;
-	uint16_t data_1c;
-	uint16_t data_1d;
-	uint16_t data_1e;
-	uint16_t data_1f;
+union thermapp_cfg {
+	uint16_t word[32];
+	struct {
+		uint16_t preamble[4];
+		uint16_t modes;// 0xXXXM  Modes set last nibble
+		uint16_t serial_num_lo;
+		uint16_t serial_num_hi;
+		uint16_t hardware_num;
+		uint16_t firmware_num;
+		uint16_t fpa_h;
+		uint16_t fpa_w;
+		uint16_t data_0b;
+		uint16_t data_0c;
+		uint16_t data_0d;
+		int16_t  temp_thermistor;
+		uint16_t temp_fpa_diode;
+		uint16_t VoutA; //DCoffset;// AD5628 VoutA, Range: 0V - 2.45V, max 2048
+		uint16_t data_11;
+		uint16_t VoutC;//gain;// AD5628 VoutC, Range: 0V - 3.59V, max 2984 ??????
+		uint16_t VoutD;// AD5628 VoutD, Range: 0V - 2.895V, max 2394 ??????
+		uint16_t VoutE;// AD5628 VoutE, Range: 0V - 3.63V, max 2997, FPA VBUS
+		uint16_t data_15;
+		uint16_t data_16;
+		uint16_t data_17;
+		uint16_t data_18;
+		uint16_t data_offset; // or header_size?
+		uint16_t frame_count;
+		uint16_t data_1b;
+		uint16_t data_1c;
+		uint16_t data_1d;
+		uint16_t data_1e;
+		uint16_t data_1f;
+	};
 };
 
 union thermapp_frame {
-	struct thermapp_cfg header;
+	union thermapp_cfg header;
 	unsigned char bytes[FRAME_PADDED_SIZE];
 };
 
@@ -97,6 +100,38 @@ struct thermapp_cal {
 
 	unsigned char *raw_buf[CAL_FILES];
 	size_t raw_len[CAL_FILES];
+	uint32_t valid;
+
+	// from 0.bin
+	uint16_t ver_format;
+	uint16_t ver_data;
+	uint16_t cal_type;
+	char model[20 + 1];
+	char lens[10 + 1];
+	char description[30 + 1];
+	char cal_date[6 + 1]; // DDMMYY format
+	float cal_temp_min; // celsius
+	float cal_temp_max; // celsius
+	double coeffs_fpa_diode[2];
+	double coeffs_thermistor[6];
+	double alpha_fpa_diode;
+	double alpha_thermistor;
+	float thresh_med_to_lo; // celsius
+	float thresh_lo_to_med; // celsius
+	float thresh_hi_to_med; // celsius
+	float thresh_med_to_hi; // celsius
+	float transient_oper_time; // minutes
+	float delta_temp_max;
+	float delta_temp_min;
+	float transient_step_time; // seconds
+
+	// from 11.bin
+	union thermapp_cfg cfg;
+	double gsk_voltage_min;
+	double gsk_voltage_max;
+	double histogram_peak_target;
+	double delta_thermistor[3];
+	float dist_param[5];
 };
 
 
@@ -108,7 +143,7 @@ size_t thermapp_usb_frame_read(struct thermapp_usb_dev *, void *, size_t);
 size_t thermapp_usb_cfg_write(struct thermapp_usb_dev *, const void *, size_t, size_t);
 void thermapp_usb_close(struct thermapp_usb_dev *);
 
-struct thermapp_cal *thermapp_cal_open(const char *, const struct thermapp_cfg *);
+struct thermapp_cal *thermapp_cal_open(const char *, const union thermapp_cfg *);
 void thermapp_cal_close(struct thermapp_cal *);
 
 #endif /* THERMAPP_H */

@@ -294,8 +294,8 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 		cal->firmware_num = 7; // ???
 	}
 
-	// Everything beyond this point is optional.
-	// Caller is responsible for handling missing data.
+	// Optional: Everything between here and err attempts to read the factory calibration files.
+
 	if (!dir || !*dir) {
 		goto err;
 	}
@@ -356,6 +356,13 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 	}
 
 err:
+	// Provide experimental defaults if any calibration data is missing.
+
+	if (!(cal->valid[0] & (1 << 0))) {
+		cal->coeffs_fpa_diode[0] = 0.00652 * -14336;
+		cal->coeffs_fpa_diode[1] = 0.00652;
+	}
+
 	return cal;
 }
 

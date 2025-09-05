@@ -10,6 +10,7 @@
 
 #include <inttypes.h>
 #include <limits.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -192,10 +193,6 @@ main(int argc, char *argv[])
 			printf("Hardware number: %" PRIu16 "\n", thermcal->hardware_num);
 			printf("Firmware number: %" PRIu16 "\n", thermcal->firmware_num);
 
-			// We don't know offset and quant value for temperature.
-			// We use experimental value.
-			printf("Temperature: %f\n", (frame.header.temp_fpa_diode - 14336) * 0.00652);
-
 			if (v4l2_format_select(fdwr)) {
 				ret = EXIT_FAILURE;
 				break;
@@ -240,6 +237,19 @@ main(int argc, char *argv[])
 				}
 			}
 		}
+
+		double temp_raw = frame.header.temp_fpa_diode;
+		double temp_fpa = thermcal->coeffs_fpa_diode[1];
+		temp_fpa = fma(temp_fpa, temp_raw, thermcal->coeffs_fpa_diode[0]);
+		temp_raw = frame.header.temp_thermistor;
+		double temp_therm = thermcal->coeffs_thermistor[5];
+		temp_therm = fma(temp_therm, temp_raw, thermcal->coeffs_thermistor[4]);
+		temp_therm = fma(temp_therm, temp_raw, thermcal->coeffs_thermistor[3]);
+		temp_therm = fma(temp_therm, temp_raw, thermcal->coeffs_thermistor[2]);
+		temp_therm = fma(temp_therm, temp_raw, thermcal->coeffs_thermistor[1]);
+		temp_therm = fma(temp_therm, temp_raw, thermcal->coeffs_thermistor[0]);
+		printf("\rFrame #%" PRIu16 ":  FPA: %f C  Thermistor: %f C", frame.header.frame_count, temp_fpa, temp_therm);
+		fflush(stdout);
 
 		uint8_t img[FRAME_PIXELS * 3 / 2];
 		int i;

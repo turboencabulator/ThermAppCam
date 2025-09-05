@@ -204,7 +204,7 @@ main(int argc, char *argv[])
 			continue;
 		}
 
-		int16_t *pixels = (int16_t *)&frame.bytes[frame.header.data_offset];
+		uint16_t *pixels = (uint16_t *)&frame.bytes[frame.header.data_offset];
 #ifndef FRAME_RAW
 		if (autocal_frame) {
 			autocal_frame -= 1;

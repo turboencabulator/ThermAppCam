@@ -165,8 +165,6 @@ main(int argc, char *argv[])
 	union thermapp_frame frame;
 	int ident_frame = 1;
 #ifndef FRAME_RAW
-	double gain_cal = 1;
-	double offset_cal = 0;
 	int image_cal[FRAME_PIXELS] = { 0 };
 	int deadpixel_map[FRAME_PIXELS] = { 0 };
 	int autocal_frame = 50;
@@ -257,7 +255,7 @@ main(int argc, char *argv[])
 		for (i = 0; i < FRAME_PIXELS; i++) { // get the min and max values
 			// only bother if the pixel isn't dead
 			if (!deadpixel_map[i]) {
-				int x = ((pixels[i] - image_cal[i]) * gain_cal) + offset_cal;
+				int x = pixels[i] - image_cal[i];
 				if (x > frameMax) {
 					frameMax = x;
 				}
@@ -268,7 +266,7 @@ main(int argc, char *argv[])
 		}
 		// second time through, this time actually scaling data
 		for (i = 0; i < FRAME_PIXELS; i++) {
-			int x = ((pixels[i] - image_cal[i]) * gain_cal) + offset_cal;
+			int x = pixels[i] - image_cal[i];
 			if (deadpixel_map[i]) {
 				x = 16;
 			} else {

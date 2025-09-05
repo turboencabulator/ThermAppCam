@@ -54,9 +54,10 @@ read_string(char *dst, unsigned char *src, size_t len)
 static void
 parse_params(struct thermapp_cal *cal)
 {
+	size_t set = 0;
 	size_t id = 0;
-	unsigned char *src = cal->raw_buf[id];
-	size_t len = cal->raw_len[id];
+	unsigned char *src = cal->raw_buf[set][id];
+	size_t len = cal->raw_len[set][id];
 
 	// TODO: Do all fields exist in all versions?
 	if (!src || len != 0x98) {
@@ -67,6 +68,8 @@ parse_params(struct thermapp_cal *cal)
 	//   0:  All data in other files encoded as (double).
 	//   1:  NUC tables now encoded as (float), header now encoded as (int16_t), new extra fields following header.
 	//   2:  NUC tables should be 640x480 for the ThermApp-PRO, header now encoded as (uint16_t).
+	// cal_type:
+	//   2:  ThermApp-TH device, calibration sets 1-3 are present.
 	cal->ver_format = read_word(src); src += 2;
 	cal->ver_data   = read_word(src); src += 2;
 	cal->cal_type   = read_word(src); src += 2;
@@ -98,58 +101,58 @@ parse_params(struct thermapp_cal *cal)
 	cal->delta_temp_min      = read_float(src); src += 4;
 	cal->transient_step_time = read_float(src); src += 4;
 
-	cal->valid |= 1 << id;
+	cal->valid[set] |= 1 << id;
 }
 
 static void
-parse_header(struct thermapp_cal *cal)
+parse_header(struct thermapp_cal *cal, size_t set)
 {
 	size_t id = 11;
-	unsigned char *src = cal->raw_buf[id];
-	size_t len = cal->raw_len[id];
+	unsigned char *src = cal->raw_buf[set][id];
+	size_t len = cal->raw_len[set][id];
 
-	if (!src || !(cal->valid & (1 << 0))) {
+	if (!src) {
 		return;
 	}
 
 	if (cal->ver_format == 0) {
 		if (len == 0x100) {
 			for (size_t i = 0; i < 32; ++i) {
-				cal->cfg.word[i] = (int16_t)read_double(src); src += 8;
+				cal->header[set].cfg.word[i] = (int16_t)read_double(src); src += 8;
 			}
-			cal->valid |= 1 << id;
+			cal->valid[set] |= 1 << id;
 		}
 	} else {
 		// TODO: Do all fields exist in all versions?
 		if (len == 0x68) {
 			for (size_t i = 0; i < 32; ++i) {
-				cal->cfg.word[i] = read_word(src); src += 2;
+				cal->header[set].cfg.word[i] = read_word(src); src += 2;
 			}
-			cal->valid |= 1 << id;
+			cal->valid[set] |= 1 << id;
 
-			cal->gsk_voltage_min = read_word(src); src += 2;
-			cal->gsk_voltage_max = read_word(src); src += 2;
-			cal->histogram_peak_target = read_float(src); src += 4;
+			cal->header[set].gsk_voltage_min = read_word(src); src += 2;
+			cal->header[set].gsk_voltage_max = read_word(src); src += 2;
+			cal->header[set].histogram_peak_target = read_float(src); src += 4;
 
 			for (size_t i = 0; i < 3; ++i) {
-				cal->delta_thermistor[i] = read_float(src); src += 4;
+				cal->header[set].delta_thermistor[i] = read_float(src); src += 4;
 			}
 			for (size_t i = 0; i < 5; ++i) {
-				cal->dist_param[i] = read_float(src); src += 4;
+				cal->header[set].dist_param[i] = read_float(src); src += 4;
 			}
-			cal->valid |= 1 << CAL_FILES;
+			cal->valid[set] |= 1 << CAL_FILES;
 		}
 	}
 }
 
 static void
-parse_nuc(struct thermapp_cal *cal, size_t id)
+parse_nuc(struct thermapp_cal *cal, size_t set, size_t id)
 {
-	unsigned char *src = cal->raw_buf[id];
+	unsigned char *src = cal->raw_buf[set][id];
 	float *dst = (float *)src;
-	size_t len = cal->raw_len[id];
+	size_t len = cal->raw_len[set][id];
 
-	if (!src || !(cal->valid & (1 << 0))) {
+	if (!src) {
 		return;
 	}
 
@@ -158,7 +161,7 @@ parse_nuc(struct thermapp_cal *cal, size_t id)
 			for (size_t i = 0; i < 384 * 288; ++i) {
 				*dst++ = (float)read_double(src); src += 8;
 			}
-			cal->valid |= 1 << id;
+			cal->valid[set] |= 1 << id;
 		}
 	} else if (cal->ver_format == 1) {
 		if (len == 384 * 288 * 4) {
@@ -167,7 +170,7 @@ parse_nuc(struct thermapp_cal *cal, size_t id)
 				*dst++ = read_float(src); src += 4;
 			}
 #endif
-			cal->valid |= 1 << id;
+			cal->valid[set] |= 1 << id;
 		}
 	} else if (cal->ver_format == 2) {
 		if (len == 640 * 480 * 4) {
@@ -176,34 +179,50 @@ parse_nuc(struct thermapp_cal *cal, size_t id)
 				*dst++ = read_float(src); src += 4;
 			}
 #endif
-			cal->valid |= 1 << id;
+			cal->valid[set] |= 1 << id;
 		}
 	}
 }
 
-static const char *leaf_names[CAL_FILES] = {
-	"0.bin",
-	"1.bin",
-	"2.bin",
-	"3.bin",
-	"4.bin",
-	"5.bin",
-	"6.bin",
-	"7.bin",
-	"8.bin",
-	"9.bin",
-	"10.bin",
-	"11.bin",
+static const char *leaf_names[CAL_FILES][CAL_SETS] = {
+	{ "0.bin",  NULL,      NULL,      NULL,      }, // Parameters
+	{ "1.bin",  NULL,      NULL,      NULL,      }, // Bad pixel map (1.0 = good, 0.0 = bad)
+	{ "2.bin",  "2a.bin",  "2b.bin",  "2c.bin",  }, // NUC coefficents: cfg[15]
+	{ "3.bin",  "3a.bin",  "3b.bin",  "3c.bin",  }, // NUC coefficents: cfg[15]^2
+	{ "4.bin",  "4a.bin",  "4b.bin",  "4c.bin",  }, // NUC coefficents: cfg[15] * pixel
+	{ "5.bin",  "5a.bin",  "5b.bin",  "5c.bin",  }, // NUC coefficents: pixel
+	{ "6.bin",  "6a.bin",  "6b.bin",  "6c.bin",  }, // NUC coefficents: 1
+	{ "7.bin",  "7a.bin",  "7b.bin",  "7c.bin",  }, // NUC coefficents: pixel^2
+	{ "8.bin",  NULL,      NULL,      NULL,      }, // NUC coefficents: cfg[18]
+	{ "9.bin",  NULL,      NULL,      NULL,      }, // NUC coefficents: cfg[18]^2
+	{ "10.bin", NULL,      NULL,      NULL,      }, // NUC coefficents: cfg[18] * pixel
+	{ "11.bin", "11a.bin", "11b.bin", "11c.bin", }, // Header
+	{ NULL,     NULL,      NULL,      NULL,      },
+	{ NULL,     NULL,      NULL,      NULL,      },
+	{ NULL,     NULL,      NULL,      NULL,      },
+	{ NULL,     NULL,      NULL,      NULL,      },
+	{ NULL,     NULL,      NULL,      NULL,      },
+	{ NULL,     NULL,      NULL,      NULL,      },
+	{ NULL,     "18a.bin", "18b.bin", "18c.bin", }, // NUC coefficents: pixel^3
+	{ NULL,     "19a.bin", "19b.bin", "19c.bin", }, // NUC coefficents: pixel^4
+	{ NULL,     "20a.bin", "20b.bin", "20c.bin", }, // NUC coefficents: cfg[15]^2 * pixel^2
+	{ NULL,     "21a.bin", "21b.bin", "21c.bin", }, // Transient coefficents: Thermistor temp - FPA temp
+	{ NULL,     "22a.bin", "22b.bin", "22c.bin", }, // Transient coefficents: 1
 };
 
 static void
-read_leaf(struct thermapp_cal *cal, size_t id)
+read_leaf(struct thermapp_cal *cal, size_t set, size_t id)
 {
 	int fd = -1;
 	unsigned char *buf = NULL;
+	const char *leaf_name = leaf_names[id][set];
+
+	if (!leaf_name) {
+		return;
+	}
 
 	*cal->leaf_ptr = '\0';
-	strncat(cal->leaf_ptr, leaf_names[id], cal->leaf_len - 1);
+	strncat(cal->leaf_ptr, leaf_name, cal->leaf_len - 1);
 	printf("Reading %s\n", cal->path_buf);
 
 	fd = open(cal->path_buf, O_RDONLY);
@@ -248,8 +267,8 @@ read_leaf(struct thermapp_cal *cal, size_t id)
 	}
 
 	close(fd);
-	cal->raw_buf[id] = buf;
-	cal->raw_len[id] = len;
+	cal->raw_buf[set][id] = buf;
+	cal->raw_len[set][id] = len;
 	return;
 
 err:
@@ -278,7 +297,7 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 	// Everything beyond this point is optional.
 	// Caller is responsible for handling missing data.
 	if (!dir || !*dir) {
-		return cal;
+		goto err;
 	}
 
 	// Set up a buffer for path manipulation, for read_leaf.
@@ -286,40 +305,57 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 	const char *format = dir[strlen(dir) - 1] == '/'
 	                   ? "%s%" PRIu32 "/%s"
 	                   : "%s/%" PRIu32 "/%s";
-	const char *longest_leaf = "11.bin";
+	const char *longest_leaf = "11a.bin";
 	char *path_buf;
 	int path_len, stem_len;
 	path_len = snprintf(NULL, 0, format, dir, cal->serial_num, longest_leaf);
 	if (path_len <= 0) {
-		return cal;
+		goto err;
 	}
 	path_len += 1;
 	path_buf = malloc(path_len);
 	if (!path_buf) {
 		perror("malloc");
-		return cal;
+		goto err;
 	}
 	stem_len = snprintf(path_buf, path_len, format, dir, cal->serial_num, "");
 	if (stem_len <= 0) {
 		free(path_buf);
-		return cal;
+		goto err;
 	}
 	cal->path_buf = path_buf;
 	cal->leaf_ptr = path_buf + stem_len;
 	cal->leaf_len = path_len - stem_len;
 
-	// Attempt to read each leaf file.
-	// Missing/empty/failures result in cal->raw_buf[i] == NULL on a per-file basis.
-	for (size_t i = 0; i < CAL_FILES; ++i)
-		read_leaf(cal, i);
+	// Attempt to read and parse each leaf file.
+	// Missing/empty/failures result in cal->raw_buf[set][id] == NULL on a per-file basis.
+	for (size_t set = 0; set < CAL_SETS; ++set) {
+		for (size_t id = 0; id < CAL_FILES; ++id) {
+			read_leaf(cal, set, id);
 
-	// Convert data to host endianness, update valid flags where successful.
-	parse_params(cal);
-	parse_header(cal);
-	for (size_t i = 1; i < 11; ++i) {
-		parse_nuc(cal, i);
+			if (id == 0 && set == 0) {
+				parse_params(cal);
+
+				// Interpretation of all other files depend on version constants in this first file.
+				// Abort if first file is missing/corrupt.
+				if (!(cal->valid[set] & (1 << id))) {
+					goto err;
+				}
+			} else if (id == 11) {
+				parse_header(cal, set);
+			} else {
+				parse_nuc(cal, set, id);
+			}
+		}
+
+		// Only set 0 is expected to exist for non-TH devices.
+		// Sets 1-3 are for TH devices in thermography mode.
+		if (cal->cal_type != 2) {
+			break;
+		}
 	}
 
+err:
 	return cal;
 }
 
@@ -329,8 +365,9 @@ thermapp_cal_close(struct thermapp_cal *cal)
 	if (!cal)
 		return;
 
-	for (size_t i = 0; i < CAL_FILES; ++i)
-		free(cal->raw_buf[i]);
+	for (size_t set = 0; set < CAL_SETS; ++set)
+		for (size_t id = 0; id < CAL_FILES; ++id)
+			free(cal->raw_buf[set][id]);
 	free(cal->path_buf);
 	free(cal);
 }

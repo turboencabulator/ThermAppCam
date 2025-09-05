@@ -31,7 +31,8 @@
 #error TRANSFER_SIZE must not be larger than FRAME_PADDED_SIZE
 #endif
 
-#define CAL_FILES 12
+#define CAL_SETS   4
+#define CAL_FILES 23
 
 // AD5628 DAC in Therm App is for generating control voltage
 // VREF = 2.5 volts 11 Bit
@@ -98,9 +99,9 @@ struct thermapp_cal {
 	char *leaf_ptr;
 	size_t leaf_len;
 
-	unsigned char *raw_buf[CAL_FILES];
-	size_t raw_len[CAL_FILES];
-	uint32_t valid;
+	unsigned char *raw_buf[CAL_SETS][CAL_FILES];
+	size_t raw_len[CAL_SETS][CAL_FILES];
+	uint32_t valid[CAL_SETS];
 
 	// from 0.bin
 	uint16_t ver_format;
@@ -125,13 +126,15 @@ struct thermapp_cal {
 	float delta_temp_min;
 	float transient_step_time; // seconds
 
-	// from 11.bin
-	union thermapp_cfg cfg;
-	double gsk_voltage_min;
-	double gsk_voltage_max;
-	double histogram_peak_target;
-	double delta_thermistor[3];
-	float dist_param[5];
+	// from 11{,a,b,c}.bin
+	struct {
+		union thermapp_cfg cfg;
+		double gsk_voltage_min;
+		double gsk_voltage_max;
+		double histogram_peak_target;
+		double delta_thermistor[3];
+		float dist_param[5];
+	} header[CAL_SETS];
 };
 
 

@@ -165,8 +165,8 @@ main(int argc, char *argv[])
 	union thermapp_frame frame;
 	int ident_frame = 1;
 #ifndef FRAME_RAW
-	int image_cal[FRAME_PIXELS] = { 0 };
-	int deadpixel_map[FRAME_PIXELS] = { 0 };
+	float offset_cal[FRAME_PIXELS] = { 0 };
+	float livepixel_map[FRAME_PIXELS] = { 0 };
 	int autocal_frame = 50;
 #endif
 	thermapp_usb_start(thermdev);
@@ -212,7 +212,7 @@ main(int argc, char *argv[])
 			fflush(stdout);
 
 			for (int i = 0; i < FRAME_PIXELS; i++) {
-				image_cal[i] += pixels[i];
+				offset_cal[i] += pixels[i];
 			}
 
 			if (autocal_frame) {
@@ -220,18 +220,21 @@ main(int argc, char *argv[])
 			}
 			printf("\nCalibration finished\n");
 
-			long meancal = 0;
+			double meancal = 0;
 			for (int i = 0; i < FRAME_PIXELS; i++) {
-				image_cal[i] /= 50;
-				meancal += image_cal[i];
+				offset_cal[i] /= 50.0f;
+				meancal += offset_cal[i];
 			}
 			meancal /= FRAME_PIXELS;
 			// record the dead pixels
 			for (int i = 0; i < FRAME_PIXELS; i++) {
-				if ((image_cal[i] > meancal + 250) || (image_cal[i] < meancal - 250)) {
-					printf("Dead pixel ID: %d (%d vs %li)\n", i, image_cal[i], meancal);
-					deadpixel_map[i] = 1;
+				if (fabs(offset_cal[i] - meancal) > 250.0) {
+					printf("Dead pixel ID: %d (%f vs %f)\n", i, offset_cal[i], meancal);
+					livepixel_map[i] = 0.0f;
+				} else {
+					livepixel_map[i] = 1.0f;
 				}
+				offset_cal[i] = -offset_cal[i];
 			}
 		}
 
@@ -254,8 +257,8 @@ main(int argc, char *argv[])
 		int frameMin = INT_MAX;
 		for (i = 0; i < FRAME_PIXELS; i++) { // get the min and max values
 			// only bother if the pixel isn't dead
-			if (!deadpixel_map[i]) {
-				int x = pixels[i] - image_cal[i];
+			if (livepixel_map[i]) {
+				int x = pixels[i] + offset_cal[i];
 				if (x > frameMax) {
 					frameMax = x;
 				}
@@ -266,8 +269,8 @@ main(int argc, char *argv[])
 		}
 		// second time through, this time actually scaling data
 		for (i = 0; i < FRAME_PIXELS; i++) {
-			int x = pixels[i] - image_cal[i];
-			if (deadpixel_map[i]) {
+			int x = pixels[i] + offset_cal[i];
+			if (!livepixel_map[i]) {
 				x = 16;
 			} else {
 				x = (((double)x - frameMin)/(frameMax - frameMin)) * (235 - 16) + 16;

@@ -236,6 +236,9 @@ main(int argc, char *argv[])
 				}
 				offset_cal[i] = -offset_cal[i];
 			}
+			if (!thermcal->nuc_px_live) {
+				thermcal->nuc_px_live = livepixel_map;
+			}
 		}
 
 		double temp_raw = frame.header.temp_fpa_diode;
@@ -257,7 +260,7 @@ main(int argc, char *argv[])
 		int frameMin = INT_MAX;
 		for (i = 0; i < FRAME_PIXELS; i++) { // get the min and max values
 			// only bother if the pixel isn't dead
-			if (livepixel_map[i]) {
+			if (thermcal->nuc_px_live[i]) {
 				int x = pixels[i] + offset_cal[i];
 				if (x > frameMax) {
 					frameMax = x;
@@ -270,7 +273,7 @@ main(int argc, char *argv[])
 		// second time through, this time actually scaling data
 		for (i = 0; i < FRAME_PIXELS; i++) {
 			int x = pixels[i] + offset_cal[i];
-			if (!livepixel_map[i]) {
+			if (!thermcal->nuc_px_live[i]) {
 				x = 16;
 			} else {
 				x = (((double)x - frameMin)/(frameMax - frameMin)) * (235 - 16) + 16;

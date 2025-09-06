@@ -135,6 +135,9 @@ struct thermapp_cal {
 		double delta_thermistor[3];
 		float dist_param[5];
 	} header[CAL_SETS];
+
+	// non-owning pointers to raw_buf arrays or elsewhere
+	const float *nuc_px_live;
 };
 
 

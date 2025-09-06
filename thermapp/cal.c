@@ -341,6 +341,17 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 				if (!(cal->valid[set] & (1 << id))) {
 					goto err;
 				}
+
+				// Ensure the reported FPA size matches the expected NUC table size.
+				if (cal->ver_format == 2) {
+					if (header->fpa_w != 640 || header->fpa_h != 480) {
+						goto err;
+					}
+				} else {
+					if (header->fpa_w != 384 || header->fpa_h != 288) {
+						goto err;
+					}
+				}
 			} else if (id == 11) {
 				parse_header(cal, set);
 			} else {
@@ -353,6 +364,10 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 		if (cal->cal_type != 2) {
 			break;
 		}
+	}
+
+	if (cal->valid[0] & (1 << 1)) {
+		cal->nuc_px_live = (const float *)cal->raw_buf[0][1];
 	}
 
 err:

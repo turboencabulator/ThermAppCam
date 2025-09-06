@@ -254,6 +254,7 @@ main(int argc, char *argv[])
 		printf("\rFrame #%" PRIu16 ":  FPA: %f C  Thermistor: %f C", frame.header.frame_count, temp_fpa, temp_therm);
 		fflush(stdout);
 
+		int uniform[FRAME_PIXELS];
 		uint8_t img[FRAME_PIXELS * 3 / 2];
 		int i;
 		int frameMax = INT_MIN;
@@ -262,6 +263,7 @@ main(int argc, char *argv[])
 			// only bother if the pixel isn't dead
 			if (thermcal->nuc_px_live[i]) {
 				int x = pixels[i] + offset_cal[i];
+				uniform[i] = x;
 				if (x > frameMax) {
 					frameMax = x;
 				}
@@ -272,12 +274,9 @@ main(int argc, char *argv[])
 		}
 		// second time through, this time actually scaling data
 		for (i = 0; i < FRAME_PIXELS; i++) {
-			int x = pixels[i] + offset_cal[i];
-			if (!thermcal->nuc_px_live[i]) {
-				x = 16;
-			} else {
-				x = (((double)x - frameMin)/(frameMax - frameMin)) * (235 - 16) + 16;
-			}
+			int x = thermcal->nuc_px_live[i]
+			      ? (((double)uniform[i] - frameMin)/(frameMax - frameMin)) * (235 - 16) + 16
+			      : 16;
 			if (fliph && flipv) {
 				img[FRAME_PIXELS - i] = x;
 			} else if (fliph) {

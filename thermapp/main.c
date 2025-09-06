@@ -168,6 +168,9 @@ main(int argc, char *argv[])
 	float offset_cal[FRAME_PIXELS] = { 0 };
 	float livepixel_map[FRAME_PIXELS] = { 0 };
 	int autocal_frame = 50;
+	int temp_settle_frame = 11;
+	double temp_fpa = 0.0;
+	double temp_therm = 0.0;
 #endif
 	thermapp_usb_start(thermdev);
 	while (thermapp_usb_transfers_pending(thermdev)) {
@@ -241,17 +244,26 @@ main(int argc, char *argv[])
 			}
 		}
 
-		double temp_raw = frame.header.temp_fpa_diode;
-		double temp_fpa = thermcal->coeffs_fpa_diode[1];
-		temp_fpa = fma(temp_fpa, temp_raw, thermcal->coeffs_fpa_diode[0]);
-		temp_raw = frame.header.temp_thermistor;
-		double temp_therm = thermcal->coeffs_thermistor[5];
-		temp_therm = fma(temp_therm, temp_raw, thermcal->coeffs_thermistor[4]);
-		temp_therm = fma(temp_therm, temp_raw, thermcal->coeffs_thermistor[3]);
-		temp_therm = fma(temp_therm, temp_raw, thermcal->coeffs_thermistor[2]);
-		temp_therm = fma(temp_therm, temp_raw, thermcal->coeffs_thermistor[1]);
-		temp_therm = fma(temp_therm, temp_raw, thermcal->coeffs_thermistor[0]);
-		printf("\rFrame #%" PRIu16 ":  FPA: %f C  Thermistor: %f C", frame.header.frame_count, temp_fpa, temp_therm);
+		double raw_temp = frame.header.temp_fpa_diode;
+		double cur_temp_fpa = thermcal->coeffs_fpa_diode[1];
+		cur_temp_fpa = fma(cur_temp_fpa, raw_temp, thermcal->coeffs_fpa_diode[0]);
+		raw_temp = frame.header.temp_thermistor;
+		double cur_temp_therm = thermcal->coeffs_thermistor[5];
+		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[4]);
+		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[3]);
+		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[2]);
+		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[1]);
+		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[0]);
+		if (temp_settle_frame) {
+			temp_settle_frame -= 1;
+			temp_fpa   = cur_temp_fpa;
+			temp_therm = cur_temp_therm;
+		} else {
+			temp_fpa   = thermcal->alpha_fpa_diode  * temp_fpa   + (1.0 - thermcal->alpha_fpa_diode)  * cur_temp_fpa;
+			temp_therm = thermcal->alpha_thermistor * temp_therm + (1.0 - thermcal->alpha_thermistor) * cur_temp_therm;
+		}
+
+		printf("\rFrame #%" PRIu16 ":  FPA: %f C  Thermistor: %f C", frame.header.frame_count, cur_temp_fpa, cur_temp_therm);
 		fflush(stdout);
 
 		int uniform[FRAME_PIXELS];

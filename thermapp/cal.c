@@ -294,6 +294,12 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 		cal->firmware_num = 7; // ???
 	}
 
+	// Provide experimental defaults if any calibration data is missing.
+
+	cal->coeffs_fpa_diode[0] = 0.00652 * -14336;
+	cal->coeffs_fpa_diode[1] = 0.00652;
+	cal->nuc_live = cal->auto_live;
+
 	// Optional: Everything between here and err attempts to read the factory calibration files.
 
 	if (!dir || !*dir) {
@@ -367,17 +373,10 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 	}
 
 	if (cal->valid[0] & (1 << 1)) {
-		cal->nuc_px_live = (const float *)cal->raw_buf[0][1];
+		cal->nuc_live = (const float *)cal->raw_buf[0][1];
 	}
 
 err:
-	// Provide experimental defaults if any calibration data is missing.
-
-	if (!(cal->valid[0] & (1 << 0))) {
-		cal->coeffs_fpa_diode[0] = 0.00652 * -14336;
-		cal->coeffs_fpa_diode[1] = 0.00652;
-	}
-
 	return cal;
 }
 

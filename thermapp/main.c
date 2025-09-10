@@ -165,8 +165,6 @@ main(int argc, char *argv[])
 	union thermapp_frame frame;
 	int ident_frame = 1;
 #ifndef FRAME_RAW
-	float offset_cal[FRAME_PIXELS] = { 0 };
-	float livepixel_map[FRAME_PIXELS] = { 0 };
 	int autocal_frame = 50;
 	int temp_settle_frame = 11;
 	double temp_fpa = 0.0;
@@ -215,7 +213,7 @@ main(int argc, char *argv[])
 			fflush(stdout);
 
 			for (int i = 0; i < FRAME_PIXELS; i++) {
-				offset_cal[i] += pixels[i];
+				thermcal->auto_offset[i] += pixels[i];
 			}
 
 			if (autocal_frame) {
@@ -225,22 +223,18 @@ main(int argc, char *argv[])
 
 			double meancal = 0;
 			for (int i = 0; i < FRAME_PIXELS; i++) {
-				offset_cal[i] /= 50.0f;
-				meancal += offset_cal[i];
+				thermcal->auto_offset[i] /= 50.0f;
+				meancal += thermcal->auto_offset[i];
 			}
 			meancal /= FRAME_PIXELS;
 			// record the dead pixels
 			for (int i = 0; i < FRAME_PIXELS; i++) {
-				if (fabs(offset_cal[i] - meancal) > 250.0) {
-					printf("Dead pixel ID: %d (%f vs %f)\n", i, offset_cal[i], meancal);
-					livepixel_map[i] = 0.0f;
+				if (fabs(thermcal->auto_offset[i] - meancal) > 250.0) {
+					printf("Dead pixel ID: %d (%f vs %f)\n", i, thermcal->auto_offset[i], meancal);
 				} else {
-					livepixel_map[i] = 1.0f;
+					thermcal->auto_live[i] = 1.0f;
 				}
-				offset_cal[i] = -offset_cal[i];
-			}
-			if (!thermcal->nuc_px_live) {
-				thermcal->nuc_px_live = livepixel_map;
+				thermcal->auto_offset[i] = -thermcal->auto_offset[i];
 			}
 		}
 
@@ -273,8 +267,8 @@ main(int argc, char *argv[])
 		int frameMin = INT_MAX;
 		for (i = 0; i < FRAME_PIXELS; i++) { // get the min and max values
 			// only bother if the pixel isn't dead
-			if (thermcal->nuc_px_live[i]) {
-				int x = pixels[i] + offset_cal[i];
+			if (thermcal->nuc_live[i]) {
+				int x = pixels[i] + thermcal->auto_offset[i];
 				uniform[i] = x;
 				if (x > frameMax) {
 					frameMax = x;
@@ -286,7 +280,7 @@ main(int argc, char *argv[])
 		}
 		// second time through, this time actually scaling data
 		for (i = 0; i < FRAME_PIXELS; i++) {
-			int x = thermcal->nuc_px_live[i]
+			int x = thermcal->nuc_live[i]
 			      ? (((double)uniform[i] - frameMin)/(frameMax - frameMin)) * (235 - 16) + 16
 			      : 16;
 			if (fliph && flipv) {

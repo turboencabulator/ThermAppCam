@@ -95,15 +95,10 @@ struct thermapp_cal {
 	uint16_t hardware_num;
 	uint16_t firmware_num;
 
-	char *path_buf;
-	char *leaf_ptr;
-	size_t leaf_len;
+	// non-owning pointers to per-pixel arrays
+	const float *nuc_live; // 1.bin
 
-	unsigned char *raw_buf[CAL_SETS][CAL_FILES];
-	size_t raw_len[CAL_SETS][CAL_FILES];
-	uint32_t valid[CAL_SETS];
-
-	// from 0.bin
+	// 0.bin
 	uint16_t ver_format;
 	uint16_t ver_data;
 	uint16_t cal_type;
@@ -126,7 +121,7 @@ struct thermapp_cal {
 	float delta_temp_min;
 	float transient_step_time; // seconds
 
-	// from 11{,a,b,c}.bin
+	// 11{,a,b,c}.bin
 	struct {
 		union thermapp_cfg cfg;
 		double gsk_voltage_min;
@@ -136,8 +131,17 @@ struct thermapp_cal {
 		float dist_param[5];
 	} header[CAL_SETS];
 
-	// non-owning pointers to raw_buf arrays or elsewhere
-	const float *nuc_px_live;
+	char *path_buf;
+	char *leaf_ptr;
+	size_t leaf_len;
+
+	unsigned char *raw_buf[CAL_SETS][CAL_FILES];
+	size_t raw_len[CAL_SETS][CAL_FILES];
+	uint32_t valid[CAL_SETS];
+
+	// storage for auto-generated calibration
+	float auto_live[FRAME_PIXELS];
+	float auto_offset[FRAME_PIXELS];
 };
 
 

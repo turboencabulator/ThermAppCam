@@ -108,6 +108,31 @@ v4l2_format_select(int fdwr)
 	return 0;
 }
 
+void
+nuc(const struct thermapp_cal *cal, const union thermapp_frame *frame, int *out, int *min, int *max)
+{
+	const uint16_t *pixels = (const uint16_t *)&frame->bytes[frame->header.data_offset];
+	int frame_min = INT_MAX;
+	int frame_max = INT_MIN;
+
+	for (size_t i = 0; i < FRAME_PIXELS; ++i) {
+		int x = pixels[i] + cal->auto_offset[i];
+		out[i] = x;
+
+		// only bother updating min/max if the pixel isn't dead
+		if (cal->nuc_live[i]) {
+			if (x > frame_max) {
+				frame_max = x;
+			}
+			if (x < frame_min) {
+				frame_min = x;
+			}
+		}
+	}
+	*min = frame_min;
+	*max = frame_max;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -205,14 +230,14 @@ main(int argc, char *argv[])
 			continue;
 		}
 
-		uint16_t *pixels = (uint16_t *)&frame.bytes[frame.header.data_offset];
+		const uint16_t *pixels = (const uint16_t *)&frame.bytes[frame.header.data_offset];
 #ifndef FRAME_RAW
 		if (autocal_frame) {
 			autocal_frame -= 1;
 			printf("\rCaptured calibration frame %d/50. Keep lens covered.", 50 - autocal_frame);
 			fflush(stdout);
 
-			for (int i = 0; i < FRAME_PIXELS; i++) {
+			for (size_t i = 0; i < FRAME_PIXELS; ++i) {
 				thermcal->auto_offset[i] += pixels[i];
 			}
 
@@ -222,13 +247,13 @@ main(int argc, char *argv[])
 			printf("\nCalibration finished\n");
 
 			double meancal = 0;
-			for (int i = 0; i < FRAME_PIXELS; i++) {
+			for (size_t i = 0; i < FRAME_PIXELS; ++i) {
 				thermcal->auto_offset[i] /= 50.0f;
 				meancal += thermcal->auto_offset[i];
 			}
 			meancal /= FRAME_PIXELS;
 			// record the dead pixels
-			for (int i = 0; i < FRAME_PIXELS; i++) {
+			for (size_t i = 0; i < FRAME_PIXELS; ++i) {
 				if (fabs(thermcal->auto_offset[i] - meancal) > 250.0) {
 					printf("Dead pixel ID: %d (%f vs %f)\n", i, thermcal->auto_offset[i], meancal);
 				} else {
@@ -257,31 +282,20 @@ main(int argc, char *argv[])
 			temp_therm = thermcal->alpha_thermistor * temp_therm + (1.0 - thermcal->alpha_thermistor) * cur_temp_therm;
 		}
 
-		printf("\rFrame #%" PRIu16 ":  FPA: %f C  Thermistor: %f C", frame.header.frame_count, cur_temp_fpa, cur_temp_therm);
+		int uniform[FRAME_PIXELS];
+		int frame_max;
+		int frame_min;
+		nuc(thermcal, &frame, uniform, &frame_min, &frame_max);
+
+		printf("\rFrame #%" PRIu16 ":  FPA: %f C  Thermistor: %f C  Range: [%d:%d]", frame.header.frame_count, cur_temp_fpa, cur_temp_therm, frame_min, frame_max);
 		fflush(stdout);
 
-		int uniform[FRAME_PIXELS];
-		uint8_t img[FRAME_PIXELS * 3 / 2];
-		int i;
-		int frameMax = INT_MIN;
-		int frameMin = INT_MAX;
-		for (i = 0; i < FRAME_PIXELS; i++) { // get the min and max values
-			// only bother if the pixel isn't dead
-			if (thermcal->nuc_live[i]) {
-				int x = pixels[i] + thermcal->auto_offset[i];
-				uniform[i] = x;
-				if (x > frameMax) {
-					frameMax = x;
-				}
-				if (x < frameMin) {
-					frameMin = x;
-				}
-			}
-		}
 		// second time through, this time actually scaling data
-		for (i = 0; i < FRAME_PIXELS; i++) {
+		uint8_t img[FRAME_PIXELS * 3 / 2];
+		size_t i;
+		for (i = 0; i < FRAME_PIXELS; ++i) {
 			int x = thermcal->nuc_live[i]
-			      ? (((double)uniform[i] - frameMin)/(frameMax - frameMin)) * (235 - 16) + 16
+			      ? (((double)uniform[i] - frame_min)/(frame_max - frame_min)) * (235 - 16) + 16
 			      : 16;
 			if (fliph && flipv) {
 				img[FRAME_PIXELS - i] = x;
@@ -293,7 +307,7 @@ main(int argc, char *argv[])
 				img[i] = x;
 			}
 		}
-		for (; i < sizeof img; i++) {
+		for (; i < sizeof img; ++i) {
 			img[i] = 128;
 		}
 		write(fdwr, img, sizeof img);

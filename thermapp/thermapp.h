@@ -31,7 +31,14 @@
 #error TRANSFER_SIZE must not be larger than FRAME_PADDED_SIZE
 #endif
 
-#define CAL_SETS   4
+enum thermapp_cal_set {
+	CAL_SET_NV,
+	CAL_SET_LO,
+	CAL_SET_MED,
+	CAL_SET_HI,
+	CAL_SETS,
+};
+
 #define CAL_FILES 23
 
 // AD5628 DAC in Therm App is for generating control voltage
@@ -95,8 +102,24 @@ struct thermapp_cal {
 	uint16_t hardware_num;
 	uint16_t firmware_num;
 
+	enum thermapp_cal_set cur_set;
+
 	// non-owning pointers to per-pixel arrays
-	const float *nuc_live; // 1.bin
+	const float *nuc_live;         // 1.bin
+	const float *nuc_offset;       // 6{,a,b,c}.bin
+	const float *nuc_px;           // 5{,a,b,c}.bin
+	const float *nuc_px2;          // 7{,a,b,c}.bin
+	const float *nuc_px3;          // 18{a,b,c}.bin
+	const float *nuc_px4;          // 19{a,b,c}.bin
+	const float *nuc_tfpa;         // 2{,a,b,c}.bin
+	const float *nuc_tfpa2;        // 3{,a,b,c}.bin
+	const float *nuc_tfpa_px;      // 4{,a,b,c}.bin
+	const float *nuc_tfpa2_px2;    // 20{a,b,c}.bin
+	const float *nuc_vgsk;         // 8.bin
+	const float *nuc_vgsk2;        // 9.bin
+	const float *nuc_vgsk_px;      // 10.bin
+	const float *transient_offset; // 22{a,b,c}.bin
+	const float *transient_delta;  // 21{a,b,c}.bin
 
 	// 0.bin
 	uint16_t ver_format;
@@ -154,6 +177,7 @@ size_t thermapp_usb_cfg_write(struct thermapp_usb_dev *, const void *, size_t, s
 void thermapp_usb_close(struct thermapp_usb_dev *);
 
 struct thermapp_cal *thermapp_cal_open(const char *, const union thermapp_cfg *);
+int thermapp_cal_select(struct thermapp_cal *, enum thermapp_cal_set);
 void thermapp_cal_close(struct thermapp_cal *);
 
 #endif /* THERMAPP_H */

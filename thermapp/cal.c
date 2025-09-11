@@ -298,7 +298,10 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 
 	cal->coeffs_fpa_diode[0] = 0.00652 * -14336;
 	cal->coeffs_fpa_diode[1] = 0.00652;
+
+	cal->cur_set = CAL_SETS;
 	cal->nuc_live = cal->auto_live;
+	cal->nuc_offset = cal->auto_offset;
 
 	// Optional: Everything between here and err attempts to read the factory calibration files.
 
@@ -365,8 +368,8 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 			}
 		}
 
-		// Only set 0 is expected to exist for non-TH devices.
-		// Sets 1-3 are for TH devices in thermography mode.
+		// Only set NV (0) is expected to exist for non-TH devices.
+		// Sets {LO,MED,HI} (1-3) are for TH devices in thermography mode.
 		if (cal->cal_type != 2) {
 			break;
 		}
@@ -378,6 +381,72 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 
 err:
 	return cal;
+}
+
+int
+thermapp_cal_select(struct thermapp_cal *cal, enum thermapp_cal_set set)
+{
+#define CAL_VALID_NV    0xffc
+#define CAL_VALID_TH 0x7c08fc
+	switch (set) {
+	case CAL_SET_NV:
+		if ((cal->valid[CAL_SET_NV] & CAL_VALID_NV) != CAL_VALID_NV) {
+			return 0;
+		}
+		break;
+
+	case CAL_SET_LO:
+	case CAL_SET_MED:
+	case CAL_SET_HI:
+		if ((cal->valid[CAL_SET_LO]  & CAL_VALID_TH) != CAL_VALID_TH
+		 || (cal->valid[CAL_SET_MED] & CAL_VALID_TH) != CAL_VALID_TH
+		 || (cal->valid[CAL_SET_HI]  & CAL_VALID_TH) != CAL_VALID_TH) {
+			return 0;
+		}
+		break;
+
+	default:
+		set = CAL_SETS;
+		break;
+	}
+
+	if (cal->cur_set == set) {
+		return 0;
+	}
+
+	if (set == CAL_SETS) {
+		cal->nuc_offset       = cal->auto_offset;
+		cal->nuc_px           = NULL;
+		cal->nuc_px2          = NULL;
+		cal->nuc_px3          = NULL;
+		cal->nuc_px4          = NULL;
+		cal->nuc_tfpa         = NULL;
+		cal->nuc_tfpa2        = NULL;
+		cal->nuc_tfpa_px      = NULL;
+		cal->nuc_tfpa2_px2    = NULL;
+		cal->nuc_vgsk         = NULL;
+		cal->nuc_vgsk2        = NULL;
+		cal->nuc_vgsk_px      = NULL;
+		cal->transient_offset = NULL;
+		cal->transient_delta  = NULL;
+	} else {
+		cal->nuc_offset       = (const float *)cal->raw_buf[set][6];
+		cal->nuc_px           = (const float *)cal->raw_buf[set][5];
+		cal->nuc_px2          = (const float *)cal->raw_buf[set][7];
+		cal->nuc_px3          = (const float *)cal->raw_buf[set][18];
+		cal->nuc_px4          = (const float *)cal->raw_buf[set][19];
+		cal->nuc_tfpa         = (const float *)cal->raw_buf[set][2];
+		cal->nuc_tfpa2        = (const float *)cal->raw_buf[set][3];
+		cal->nuc_tfpa_px      = (const float *)cal->raw_buf[set][4];
+		cal->nuc_tfpa2_px2    = (const float *)cal->raw_buf[set][20];
+		cal->nuc_vgsk         = (const float *)cal->raw_buf[set][8];
+		cal->nuc_vgsk2        = (const float *)cal->raw_buf[set][9];
+		cal->nuc_vgsk_px      = (const float *)cal->raw_buf[set][10];
+		cal->transient_offset = (const float *)cal->raw_buf[set][22];
+		cal->transient_delta  = (const float *)cal->raw_buf[set][21];
+	}
+	cal->cur_set = set;
+	return 1;
 }
 
 void

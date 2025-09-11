@@ -116,7 +116,7 @@ nuc(const struct thermapp_cal *cal, const union thermapp_frame *frame, int *out,
 	int frame_max = INT_MIN;
 
 	for (size_t i = 0; i < FRAME_PIXELS; ++i) {
-		int x = pixels[i] + cal->auto_offset[i];
+		int x = pixels[i] + cal->nuc_offset[i];
 		out[i] = x;
 
 		// only bother updating min/max if the pixel isn't dead

@@ -180,4 +180,6 @@ struct thermapp_cal *thermapp_cal_open(const char *, const union thermapp_cfg *)
 int thermapp_cal_select(struct thermapp_cal *, enum thermapp_cal_set);
 void thermapp_cal_close(struct thermapp_cal *);
 
+void thermapp_img_nuc(const struct thermapp_cal *, const union thermapp_frame *, int *, int *, int *);
+
 #endif /* THERMAPP_H */

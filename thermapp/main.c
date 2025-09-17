@@ -261,7 +261,9 @@ main(int argc, char *argv[])
 		int frame_min;
 		thermapp_img_nuc(thermcal, &frame, uniform, &frame_min, &frame_max);
 
-		printf("\rFrame #%" PRIu16 ":  FPA: %f C  Thermistor: %f C  Range: [%d:%d]", frame.header.frame_count, cur_temp_fpa, cur_temp_therm, frame_min, frame_max);
+		uint32_t frame_num = frame.header.frame_num_lo
+		                   | frame.header.frame_num_hi << 16;
+		printf("\rFrame #%" PRIu32 ":  FPA: %f C  Thermistor: %f C  Range: [%d:%d]", frame_num, cur_temp_fpa, cur_temp_therm, frame_min, frame_max);
 		fflush(stdout);
 
 		// second time through, this time actually scaling data

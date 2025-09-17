@@ -69,8 +69,8 @@ union thermapp_cfg {
 		uint16_t data_17;
 		uint16_t data_18;
 		uint16_t data_offset; // or header_size?
-		uint16_t frame_count;
-		uint16_t data_1b;
+		uint16_t frame_num_lo;
+		uint16_t frame_num_hi;
 		uint16_t data_1c;
 		uint16_t data_1d;
 		uint16_t data_1e;

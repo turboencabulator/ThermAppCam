@@ -23,53 +23,11 @@
 #define FRAME_FORMAT V4L2_PIX_FMT_Y16
 #endif
 
-#define ROUND_UP_2(num)  (((num)+1)&~1)
-#define ROUND_UP_4(num)  (((num)+3)&~3)
-#define ROUND_UP_8(num)  (((num)+7)&~7)
-#define ROUND_UP_16(num) (((num)+15)&~15)
-#define ROUND_UP_32(num) (((num)+31)&~31)
-#define ROUND_UP_64(num) (((num)+63)&~63)
-
-static int
-format_properties(const unsigned int format,
-                  const unsigned int width,
-                  const unsigned int height,
-                  size_t *framesize,
-                  size_t *linewidth)
-{
-	unsigned int lw, fs;
-	switch (format) {
-	case V4L2_PIX_FMT_YUV420:
-	case V4L2_PIX_FMT_YVU420:
-		lw = width; /* ??? */
-		fs = ROUND_UP_4(width) * ROUND_UP_2(height);
-		fs += 2 * ((ROUND_UP_8(width) / 2) * (ROUND_UP_2(height) / 2));
-		break;
-	case V4L2_PIX_FMT_UYVY:
-	case V4L2_PIX_FMT_Y41P:
-	case V4L2_PIX_FMT_YUYV:
-	case V4L2_PIX_FMT_YVYU:
-		lw = (ROUND_UP_2(width) * 2);
-		fs = lw * height;
-		break;
-	case V4L2_PIX_FMT_Y10:
-	case V4L2_PIX_FMT_Y12:
-	case V4L2_PIX_FMT_Y16:
-	case V4L2_PIX_FMT_Y16_BE:
-		lw = 2 * width;
-		fs = lw * height;
-		break;
-	default:
-		return -1;
-	}
-	if (framesize) *framesize = fs;
-	if (linewidth) *linewidth = lw;
-
-	return 0;
-}
-
-static int
-v4l2_format_select(int fdwr)
+static size_t
+v4l2_format_select(int fdwr,
+                   uint32_t format,
+                   size_t width,
+                   size_t height)
 {
 	struct v4l2_format vid_format;
 
@@ -78,33 +36,60 @@ v4l2_format_select(int fdwr)
 
 	if (ioctl(fdwr, VIDIOC_G_FMT, &vid_format)) {
 		perror("VIDIOC_G_FMT");
-		return -1;
+		return 0;
 	}
 
-	vid_format.fmt.pix.width = FRAME_WIDTH;
-	vid_format.fmt.pix.height = FRAME_HEIGHT;
-	vid_format.fmt.pix.pixelformat = FRAME_FORMAT;
+	vid_format.fmt.pix.width = width;
+	vid_format.fmt.pix.height = height;
+	vid_format.fmt.pix.pixelformat = format;
 	vid_format.fmt.pix.field = V4L2_FIELD_NONE;
 	vid_format.fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
 
-	size_t framesize;
-	size_t linewidth;
-	if (format_properties(vid_format.fmt.pix.pixelformat,
-	                      vid_format.fmt.pix.width, vid_format.fmt.pix.height,
-	                      &framesize,
-	                      &linewidth)) {
-		fprintf(stderr, "unable to guess correct settings for format '%d'\n", FRAME_FORMAT);
-		return -1;
+	switch (vid_format.fmt.pix.pixelformat) {
+	case V4L2_PIX_FMT_YUV420:
+	case V4L2_PIX_FMT_YVU420:
+	case V4L2_PIX_FMT_NV12:
+	case V4L2_PIX_FMT_NV21:
+		vid_format.fmt.pix.bytesperline = vid_format.fmt.pix.width; /* ??? */
+		vid_format.fmt.pix.sizeimage = vid_format.fmt.pix.bytesperline * vid_format.fmt.pix.height;
+		vid_format.fmt.pix.sizeimage += 2 * ((vid_format.fmt.pix.width + 1) / 2) * ((vid_format.fmt.pix.height + 1) / 2);
+		break;
+	case V4L2_PIX_FMT_UYVY:
+	case V4L2_PIX_FMT_VYUY:
+	case V4L2_PIX_FMT_YUYV:
+	case V4L2_PIX_FMT_YVYU:
+		vid_format.fmt.pix.bytesperline = 4 * ((vid_format.fmt.pix.width + 1) / 2);
+		vid_format.fmt.pix.sizeimage = vid_format.fmt.pix.bytesperline * vid_format.fmt.pix.height;
+		break;
+	case V4L2_PIX_FMT_GREY:
+		vid_format.fmt.pix.bytesperline = vid_format.fmt.pix.width;
+		vid_format.fmt.pix.sizeimage = vid_format.fmt.pix.bytesperline * vid_format.fmt.pix.height;
+		break;
+	case V4L2_PIX_FMT_Y10:
+	case V4L2_PIX_FMT_Y12:
+	case V4L2_PIX_FMT_Y14:
+	case V4L2_PIX_FMT_Y16:
+	case V4L2_PIX_FMT_Y16_BE:
+		vid_format.fmt.pix.bytesperline = 2 * vid_format.fmt.pix.width;
+		vid_format.fmt.pix.sizeimage = vid_format.fmt.pix.bytesperline * vid_format.fmt.pix.height;
+		break;
+	default:
+		fprintf(stderr, "unable to guess correct settings for format '%c%c%c%c'\n",
+		        vid_format.fmt.pix.pixelformat       & 0xff,
+		        vid_format.fmt.pix.pixelformat >>  8 & 0xff,
+		        vid_format.fmt.pix.pixelformat >> 16 & 0xff,
+		        vid_format.fmt.pix.pixelformat >> 24 & 0xff);
+		return 0;
 	}
-	vid_format.fmt.pix.sizeimage = framesize;
-	vid_format.fmt.pix.bytesperline = linewidth;
+
+	size_t ret = vid_format.fmt.pix.sizeimage;
 
 	if (ioctl(fdwr, VIDIOC_S_FMT, &vid_format)) {
 		perror("VIDIOC_S_FMT");
-		return -1;
+		return 0;
 	}
 
-	return 0;
+	return ret;
 }
 
 int
@@ -114,6 +99,8 @@ main(int argc, char *argv[])
 	struct thermapp_usb_dev *thermdev = NULL;
 	struct thermapp_cal *thermcal = NULL;
 	int fdwr = -1;
+	uint8_t *img = NULL;
+	size_t img_sz = 0;
 
 	int fliph = 1;
 	int flipv = 0;
@@ -190,12 +177,25 @@ main(int argc, char *argv[])
 			printf("Hardware number: %" PRIu16 "\n", thermcal->hardware_num);
 			printf("Firmware number: %" PRIu16 "\n", thermcal->firmware_num);
 
-			if (v4l2_format_select(fdwr)) {
+			img_sz = v4l2_format_select(fdwr, FRAME_FORMAT, FRAME_WIDTH, FRAME_HEIGHT);
+			if (!img_sz) {
 				ret = EXIT_FAILURE;
 				break;
 			}
 
 #ifndef FRAME_RAW
+			img = malloc(img_sz);
+			if (!img) {
+				perror("malloc");
+				ret = EXIT_FAILURE;
+				break;
+			}
+
+			// Data in the U/V planes (when present) does not change.
+			for (size_t i = FRAME_PIXELS; i < img_sz; ++i) {
+				img[i] = 128;
+			}
+
 			printf("Calibrating... cover the lens!\n");
 #endif
 
@@ -267,9 +267,7 @@ main(int argc, char *argv[])
 		fflush(stdout);
 
 		// second time through, this time actually scaling data
-		uint8_t img[FRAME_PIXELS * 3 / 2];
-		size_t i;
-		for (i = 0; i < FRAME_PIXELS; ++i) {
+		for (size_t i = 0; i < FRAME_PIXELS; ++i) {
 			int x = thermcal->nuc_live[i]
 			      ? (((double)uniform[i] - frame_min)/(frame_max - frame_min)) * (235 - 16) + 16
 			      : 16;
@@ -283,16 +281,15 @@ main(int argc, char *argv[])
 				img[i] = x;
 			}
 		}
-		for (; i < sizeof img; ++i) {
-			img[i] = 128;
-		}
-		write(fdwr, img, sizeof img);
+		write(fdwr, img, img_sz);
 #else
 		write(fdwr, pixels, FRAME_PIXELS * sizeof *pixels);
 #endif
 	}
 
 done:
+	if (img)
+		free(img);
 	if (thermcal)
 		thermapp_cal_close(thermcal);
 	if (thermdev)

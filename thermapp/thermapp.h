@@ -54,8 +54,8 @@ union thermapp_cfg {
 		uint16_t firmware_num;
 		uint16_t fpa_h;
 		uint16_t fpa_w;
-		uint16_t data_0b;
-		uint16_t data_0c;
+		uint16_t data_h;
+		uint16_t data_w;
 		uint16_t data_0d;
 		int16_t  temp_thermistor;
 		uint16_t temp_fpa_diode;

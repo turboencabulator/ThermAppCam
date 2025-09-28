@@ -74,13 +74,14 @@ transfer_cb_out(struct libusb_transfer *transfer)
 	struct thermapp_usb_dev *dev = (struct thermapp_usb_dev *)transfer->user_data;
 
 	if (transfer->status == LIBUSB_TRANSFER_COMPLETED) {
-		if (dev->cfg_complete) {
-			memcpy(dev->cfg_out, dev->cfg_fill, HEADER_SIZE);
+		if (dev->cfg_fill_sz) {
+			memcpy(dev->cfg_out, dev->cfg_fill, dev->cfg_fill_sz);
 
 			transfer->buffer = dev->cfg_fill;
 			dev->cfg_fill = dev->cfg_out;
 			dev->cfg_out = transfer->buffer;
-			dev->cfg_complete = 0;
+			transfer->length = dev->cfg_fill_sz;
+			dev->cfg_fill_sz = 0;
 
 			int ret = libusb_submit_transfer(transfer);
 			if (ret) {
@@ -129,7 +130,7 @@ transfer_cb_in(struct libusb_transfer *transfer)
 				transfer->buffer = dev->frame_done;
 				dev->frame_done = dev->frame_in;
 				dev->frame_in = transfer->buffer;
-				dev->frame_available = 1;
+				dev->frame_done_sz = len;
 				len = 0;
 			}
 
@@ -281,13 +282,13 @@ thermapp_usb_handle_events(struct thermapp_usb_dev *dev)
 size_t
 thermapp_usb_frame_read(struct thermapp_usb_dev *dev, void *buf, size_t len)
 {
-	if (len > FRAME_PADDED_SIZE) {
-		len = FRAME_PADDED_SIZE;
+	if (len > dev->frame_done_sz) {
+		len = dev->frame_done_sz;
 	}
 	len &= ~(sizeof (uint16_t) - 1);
 
-	if (len && dev->frame_available) {
-		dev->frame_available = 0;
+	if (len) {
+		dev->frame_done_sz = 0;
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 		memcpy(buf, dev->frame_done, len);
 #else
@@ -305,8 +306,6 @@ thermapp_usb_frame_read(struct thermapp_usb_dev *dev, void *buf, size_t len)
 			dst += sizeof word;
 		}
 #endif
-	} else {
-		len = 0;
 	}
 
 	return len;
@@ -323,7 +322,7 @@ thermapp_usb_cfg_write(struct thermapp_usb_dev *dev, const void *buf, size_t ofs
 	}
 
 	if (len) {
-		dev->cfg_complete = 0;
+		dev->cfg_fill_sz = 0;
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 		memcpy(dev->cfg_fill + ofs, buf, len);
 #else
@@ -340,18 +339,20 @@ thermapp_usb_cfg_write(struct thermapp_usb_dev *dev, const void *buf, size_t ofs
 			dst += sizeof word;
 		}
 #endif
+	} else {
+		// Partial writes are buffered until completed with a 0-length write.
+		len = HEADER_SIZE;
 	}
 
-	if (!len || len == HEADER_SIZE) {
-		// Partial writes are buffered until completed with a 0-length write.
-		dev->cfg_complete = 1;
+	if (len == HEADER_SIZE) {
+		dev->cfg_fill_sz = len;
 		if (!dev->transfer_out->buffer) {
 			dev->transfer_out->status = LIBUSB_TRANSFER_COMPLETED;
 			transfer_cb_out(dev->transfer_out);
 		}
 	}
 
-	return HEADER_SIZE;
+	return len;
 }
 
 void

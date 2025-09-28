@@ -93,8 +93,8 @@ struct thermapp_usb_dev {
 	unsigned char *cfg_out;
 	unsigned char *frame_in;
 	unsigned char *frame_done;
-	int cfg_complete;
-	int frame_available;
+	size_t cfg_fill_sz;
+	size_t frame_done_sz;
 };
 
 struct thermapp_cal {

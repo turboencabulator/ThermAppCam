@@ -103,10 +103,10 @@ transfer_cb_in(struct libusb_transfer *transfer)
 	struct thermapp_usb_dev *dev = (struct thermapp_usb_dev *)transfer->user_data;
 
 	if (transfer->status == LIBUSB_TRANSFER_COMPLETED) {
-		if (transfer->actual_length % CHUNK_SIZE) {
+		if (transfer->actual_length % PACKET_SIZE) {
 			fprintf(stderr, "discarding partial transfer of size %u\n", transfer->actual_length);
 			transfer->buffer = dev->frame_in;
-			transfer->length = TRANSFER_SIZE;
+			transfer->length = BULK_SIZE_MIN;
 		} else if (transfer->actual_length) {
 			unsigned char *buf = dev->frame_in;
 			size_t old = (unsigned char *)transfer->buffer - buf;
@@ -114,18 +114,18 @@ transfer_cb_in(struct libusb_transfer *transfer)
 
 			if (!old) {
 				// Sync to start of frame.
-				// Look for preamble at start of chunk.
-				while (len >= CHUNK_SIZE) {
+				// Look for preamble at start of packet.
+				while (len >= PACKET_SIZE) {
 					if (memcmp(buf, preamble, sizeof preamble) == 0) {
 						break;
 					}
-					buf += CHUNK_SIZE;
-					len -= CHUNK_SIZE;
+					buf += PACKET_SIZE;
+					len -= PACKET_SIZE;
 				}
 				memmove(dev->frame_in, buf, len);
 			}
 
-			if (len == FRAME_PADDED_SIZE) {
+			if (len == BULK_SIZE_MAX) {
 				// Frame complete.
 				transfer->buffer = dev->frame_done;
 				dev->frame_done = dev->frame_in;
@@ -135,10 +135,7 @@ transfer_cb_in(struct libusb_transfer *transfer)
 			}
 
 			transfer->buffer = dev->frame_in + len;
-			transfer->length = TRANSFER_SIZE;
-			if (transfer->length > FRAME_PADDED_SIZE - len) {
-				transfer->length = FRAME_PADDED_SIZE - len;
-			}
+			transfer->length = len ? BULK_SIZE_MAX - len : BULK_SIZE_MIN;
 		}
 
 		int ret = libusb_submit_transfer(transfer);
@@ -175,13 +172,13 @@ thermapp_usb_open(void)
 		goto err;
 	}
 
-	dev->frame_in = malloc(FRAME_PADDED_SIZE);
+	dev->frame_in = malloc(BULK_SIZE_MAX);
 	if (!dev->frame_in) {
 		perror("malloc");
 		goto err;
 	}
 
-	dev->frame_done = malloc(FRAME_PADDED_SIZE);
+	dev->frame_done = malloc(BULK_SIZE_MAX);
 	if (!dev->frame_done) {
 		perror("malloc");
 		goto err;
@@ -240,7 +237,7 @@ thermapp_usb_open(void)
 	                          dev->usb,
 	                          LIBUSB_ENDPOINT_IN | 1,
 	                          NULL, //dev->frame_in,
-	                          TRANSFER_SIZE,
+	                          BULK_SIZE_MIN,
 	                          transfer_cb_in,
 	                          (void *)dev,
 	                          0);

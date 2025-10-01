@@ -70,7 +70,6 @@ The official ThermApp Android app sends other information to the server as part 
 * Try a different cable.  Use a high-quality USB cable.
 * Try plugging the camera into a different USB port.
 * Make sure the camera is plugged into a USB 2.0-compatible port.  The camera will not work on USB 1.x ports since their max bulk transfer size is < 512 bytes.
-* Edit `TRANSFER_SIZE` in thermapp.h and then re-install.  Try reducing it to 512.  Reducing the transfer size will result in higher CPU load.
 
 ## Todo
 * Histogram Equalization instead of linear image range scaling

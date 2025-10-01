@@ -11,25 +11,21 @@
 #define VENDOR  0x1772
 #define PRODUCT 0x0002
 
-#define HEADER_SIZE   64
-#define FRAME_WIDTH  384
-#define FRAME_HEIGHT 288
-#define FRAME_PIXELS (FRAME_WIDTH * FRAME_HEIGHT)
-#define FRAME_SIZE   (HEADER_SIZE + 2*FRAME_PIXELS)
+#define HEADER_SIZE       64
+#define FRAME_WIDTH_MIN   80
+#define FRAME_WIDTH      384
+#define FRAME_HEIGHT_MIN  80
+#define FRAME_HEIGHT     288
+#define FRAME_PIXELS_MIN (FRAME_WIDTH_MIN * FRAME_HEIGHT_MIN)
+#define FRAME_PIXELS     (FRAME_WIDTH * FRAME_HEIGHT)
+#define FRAME_SIZE_MIN   (HEADER_SIZE + 2*FRAME_PIXELS_MIN)
+#define FRAME_SIZE       (HEADER_SIZE + 2*FRAME_PIXELS)
 
-// Device apparently only works with 512-byte chunks of data.
+// Device apparently only works with wMaxPacketSize (512-byte) packets of data.
 // Note the frame is padded to a multiple of 512 bytes.
-#define CHUNK_SIZE   512
-#define FRAME_PADDED_SIZE ((FRAME_SIZE+CHUNK_SIZE-1) & ~(CHUNK_SIZE-1))
-
-// USB bulk transfers should ideally be FRAME_PADDED_SIZE but we support smaller.
-#define TRANSFER_SIZE 8192
-#if (TRANSFER_SIZE % CHUNK_SIZE) || (TRANSFER_SIZE < CHUNK_SIZE)
-#error TRANSFER_SIZE must be a multiple of CHUNK_SIZE
-#endif
-#if (TRANSFER_SIZE > FRAME_PADDED_SIZE)
-#error TRANSFER_SIZE must not be larger than FRAME_PADDED_SIZE
-#endif
+#define PACKET_SIZE      512
+#define BULK_SIZE_MIN    ((FRAME_SIZE_MIN+PACKET_SIZE-1) & ~(PACKET_SIZE-1))
+#define BULK_SIZE_MAX    ((FRAME_SIZE+PACKET_SIZE-1) & ~(PACKET_SIZE-1))
 
 enum thermapp_cal_set {
 	CAL_SET_NV,
@@ -80,7 +76,7 @@ union thermapp_cfg {
 
 union thermapp_frame {
 	union thermapp_cfg header;
-	unsigned char bytes[FRAME_PADDED_SIZE];
+	unsigned char bytes[BULK_SIZE_MAX];
 };
 
 struct thermapp_usb_dev {

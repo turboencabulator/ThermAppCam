@@ -97,8 +97,7 @@ sync(unsigned char *buf)
 		memcpy(&buf[0x16], &buf[0x12], 4);
 	}
 
-	size_t frame_sz = data_offset + 2 * data_w * data_h;
-	return (frame_sz + PACKET_SIZE - 1) & ~(PACKET_SIZE - 1);
+	return data_offset + 2 * data_w * data_h;
 }
 
 static void
@@ -187,7 +186,7 @@ transfer_cb_in(struct libusb_transfer *transfer)
 			} else if (len < exp) {
 				// Partially received.  Request the remainder.
 				transfer->buffer = dev->frame_in + len;
-				transfer->length = exp - len;
+				transfer->length = (exp - len + PACKET_SIZE - 1) & ~(PACKET_SIZE - 1);
 			} else {
 				// Frame complete.  Discard any excess.
 				transfer->buffer = dev->frame_done;

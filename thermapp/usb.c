@@ -50,6 +50,58 @@ static const union thermapp_cfg initial_cfg = {
 	.data_1f     = 0x0fff,
 };
 
+static size_t
+sync(unsigned char *buf)
+{
+	// Frame must begin with the header preamble.
+	if (memcmp(buf, preamble, sizeof preamble) != 0) {
+		return 0;
+	}
+
+	// Convert selected header fields to native byte order.
+	size_t fpa_h       = buf[0x12] + (buf[0x13] << 8);
+	size_t fpa_w       = buf[0x14] + (buf[0x15] << 8);
+	size_t data_h      = buf[0x16] + (buf[0x17] << 8);
+	size_t data_w      = buf[0x18] + (buf[0x19] << 8);
+	size_t data_offset = buf[0x32] + (buf[0x33] << 8);
+
+	// Sanity check:  Reject unexpected frame size values.  Guarantees that:
+	// * Header size / data offset is exactly 64 bytes.
+	//   * Image data immediately follows the header with no overlap or gap.
+	//   * Image data begins on an even byte boundary for endian conversions.
+	// * Image is no larger than the 384x288 or 640x480 sensor.
+	//   * Except for special cases below.
+	//   * Establishes the minimum buffer size to store the largest frame.
+	if (!((fpa_w == 384 && fpa_h == 288)
+	   || (fpa_w == 640 && fpa_h == 480))
+	 || data_w > fpa_w
+	 || data_h > fpa_h
+	 || data_offset != HEADER_SIZE) {
+		return 0;
+	}
+
+	// Special cases where the reported size is incorrect.
+	// Rewrite the header so that users don't need to know this.
+	// XXX: May be model-specific or firmware-specific behavior.
+	//      Tested on original ThermApp (HW #4, FW #120).
+	if (!data_w && !data_h) {
+		data_w = 512;
+		data_h = 308;
+		buf[0x16] = data_h      & 0xff;
+		buf[0x17] = data_h >> 8 & 0xff;
+		buf[0x18] = data_w      & 0xff;
+		buf[0x19] = data_w >> 8 & 0xff;
+	} else if (data_w < FRAME_WIDTH_MIN || data_h < FRAME_HEIGHT_MIN) {
+		data_w = fpa_w;
+		data_h = fpa_h;
+		memcpy(&buf[0x16], &buf[0x12], 4);
+	}
+
+	size_t frame_sz = data_offset + 2 * data_w * data_h;
+	frame_sz = (frame_sz + PACKET_SIZE - 1) & ~(PACKET_SIZE - 1);
+	return frame_sz > BULK_SIZE_MAX ? 0 : frame_sz;
+}
+
 static void
 cancel_transfers(struct thermapp_usb_dev *dev)
 {
@@ -109,33 +161,44 @@ transfer_cb_in(struct libusb_transfer *transfer)
 			transfer->length = BULK_SIZE_MIN;
 		} else if (transfer->actual_length) {
 			unsigned char *buf = dev->frame_in;
+			size_t exp = dev->frame_in_sz;
 			size_t old = (unsigned char *)transfer->buffer - buf;
 			size_t len = old + transfer->actual_length;
 
 			if (!old) {
-				// Sync to start of frame.
-				// Look for preamble at start of packet.
-				while (len >= PACKET_SIZE) {
-					if (memcmp(buf, preamble, sizeof preamble) == 0) {
+				// No previous data.  Sync to start of frame.
+				do {
+					// Need at least HEADER_SIZE bytes to sync.
+					// len is a nonzero multiple of PACKET_SIZE bytes.
+					exp = sync(buf);
+					if (exp) {
+						dev->frame_in_sz = exp;
+						memmove(dev->frame_in, buf, len);
 						break;
 					}
 					buf += PACKET_SIZE;
 					len -= PACKET_SIZE;
-				}
-				memmove(dev->frame_in, buf, len);
+				} while (len);
 			}
 
-			if (len == BULK_SIZE_MAX) {
-				// Frame complete.
+			if (!len) {
+				// Still not sync'd.
+				transfer->buffer = dev->frame_in;
+				transfer->length = BULK_SIZE_MIN;
+			} else if (len < exp) {
+				// Partially received.  Request the remainder.
+				transfer->buffer = dev->frame_in + len;
+				transfer->length = exp - len;
+			} else {
+				// Frame complete.  Discard any excess.
 				transfer->buffer = dev->frame_done;
 				dev->frame_done = dev->frame_in;
 				dev->frame_in = transfer->buffer;
-				dev->frame_done_sz = len;
-				len = 0;
-			}
+				dev->frame_done_sz = exp;
 
-			transfer->buffer = dev->frame_in + len;
-			transfer->length = len ? BULK_SIZE_MAX - len : BULK_SIZE_MIN;
+				// Resync.  The next frame may not be the same size.
+				transfer->length = BULK_SIZE_MIN;
+			}
 		}
 
 		int ret = libusb_submit_transfer(transfer);

@@ -90,6 +90,7 @@ struct thermapp_usb_dev {
 	unsigned char *frame_in;
 	unsigned char *frame_done;
 	size_t cfg_fill_sz;
+	size_t frame_in_sz;
 	size_t frame_done_sz;
 };
 

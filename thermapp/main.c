@@ -204,6 +204,11 @@ main(int argc, char *argv[])
 			continue;
 		}
 
+		if (frame.header.data_w != FRAME_WIDTH
+		 || frame.header.data_h != FRAME_HEIGHT) {
+			continue;
+		}
+
 		const uint16_t *pixels = (const uint16_t *)&frame.bytes[frame.header.data_offset];
 #ifndef FRAME_RAW
 		if (autocal_frame) {

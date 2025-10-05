@@ -27,8 +27,8 @@ static const union thermapp_cfg initial_cfg = {
 	//.firmware_num = 0, // (status)
 	//.fpa_h       = 0, // (status)
 	//.fpa_w       = 0, // (status)
-	.data_h      = FRAME_HEIGHT, // (control/status)
-	.data_w      = FRAME_WIDTH, // (control/status)
+	.data_h      = FRAME_HEIGHT_MAX, // (control/status)
+	.data_w      = FRAME_WIDTH_MAX, // (control/status)
 	.data_0d     = 0x0019,
 	//.temp_thermistor = 0, // (status)
 	//.temp_fpa_diode = 0, // (status)
@@ -69,9 +69,9 @@ sync(unsigned char *buf)
 	// * Header size / data offset is exactly 64 bytes.
 	//   * Image data immediately follows the header with no overlap or gap.
 	//   * Image data begins on an even byte boundary for endian conversions.
-	// * Image is no larger than the 384x288 or 640x480 sensor.
-	//   * Except for special cases below.
+	// * Image is no larger than 640x480.
 	//   * Establishes the minimum buffer size to store the largest frame.
+	//   * Image can only be larger than the FPA in the special case below.
 	if (!((fpa_w == 384 && fpa_h == 288)
 	   || (fpa_w == 640 && fpa_h == 480))
 	 || data_w > fpa_w
@@ -98,8 +98,7 @@ sync(unsigned char *buf)
 	}
 
 	size_t frame_sz = data_offset + 2 * data_w * data_h;
-	frame_sz = (frame_sz + PACKET_SIZE - 1) & ~(PACKET_SIZE - 1);
-	return frame_sz > BULK_SIZE_MAX ? 0 : frame_sz;
+	return (frame_sz + PACKET_SIZE - 1) & ~(PACKET_SIZE - 1);
 }
 
 static void

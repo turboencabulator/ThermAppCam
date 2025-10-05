@@ -11,77 +11,132 @@ thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *fra
 	float tfpa = frame->header.temp_fpa_diode;
 	float vgsk = frame->header.VoutC;
 	const uint16_t *pixels = (const uint16_t *)&frame->bytes[frame->header.data_offset];
+	size_t nuc_start = cal->ofs_y * cal->nuc_w + cal->ofs_x;
+	size_t nuc_row_adj = cal->nuc_w - cal->img_w;
 	int frame_min = INT_MAX;
 	int frame_max = INT_MIN;
 
 	if (cal->cur_set == CAL_SET_NV) {
-		for (size_t i = 0; i < FRAME_PIXELS; ++i) {
-			float px = pixels[i];
-			float t2 = cal->nuc_tfpa2[i] * tfpa + cal->nuc_tfpa[i];
-			float v2 = cal->nuc_vgsk2[i] * vgsk + cal->nuc_vgsk[i];
-			float p2 = cal->nuc_px2[i] * px + cal->nuc_px[i];
-			p2 += cal->nuc_tfpa_px[i] * tfpa;
-			p2 += cal->nuc_vgsk_px[i] * vgsk;
-			float sum = p2 * px + cal->nuc_offset[i];
-			sum += t2 * tfpa;
-			sum += v2 * vgsk;
+		const float *nuc_live    = &cal->nuc_live[nuc_start];
+		const float *nuc_offset  = &cal->nuc_offset[nuc_start];
+		const float *nuc_px      = &cal->nuc_px[nuc_start];
+		const float *nuc_px2     = &cal->nuc_px2[nuc_start];
+		const float *nuc_tfpa    = &cal->nuc_tfpa[nuc_start];
+		const float *nuc_tfpa2   = &cal->nuc_tfpa2[nuc_start];
+		const float *nuc_tfpa_px = &cal->nuc_tfpa_px[nuc_start];
+		const float *nuc_vgsk    = &cal->nuc_vgsk[nuc_start];
+		const float *nuc_vgsk2   = &cal->nuc_vgsk2[nuc_start];
+		const float *nuc_vgsk_px = &cal->nuc_vgsk_px[nuc_start];
 
-			int new = (int)sum;
-			out[i] = new;
+		for (size_t y = cal->img_h; y; --y) {
+			for (size_t x = cal->img_w; x; --x) {
+				float px = *pixels++;
+				float t2 = *nuc_tfpa2++ * tfpa + *nuc_tfpa++;
+				float v2 = *nuc_vgsk2++ * vgsk + *nuc_vgsk++;
+				float p2 = *nuc_px2++ * px + *nuc_px++;
+				p2 += *nuc_tfpa_px++ * tfpa;
+				p2 += *nuc_vgsk_px++ * vgsk;
+				float sum = p2 * px + *nuc_offset++;
+				sum += t2 * tfpa;
+				sum += v2 * vgsk;
 
-			// only bother updating min/max if the pixel isn't dead
-			if (cal->nuc_live[i]) {
-				if (new > frame_max) {
-					frame_max = new;
-				}
-				if (new < frame_min) {
-					frame_min = new;
+				int new = (int)sum;
+				*out++ = new;
+
+				// only bother updating min/max if the pixel isn't dead
+				if (*nuc_live++) {
+					if (new > frame_max) {
+						frame_max = new;
+					}
+					if (new < frame_min) {
+						frame_min = new;
+					}
 				}
 			}
+			nuc_live    += nuc_row_adj;
+			nuc_offset  += nuc_row_adj;
+			nuc_px      += nuc_row_adj;
+			nuc_px2     += nuc_row_adj;
+			nuc_tfpa    += nuc_row_adj;
+			nuc_tfpa2   += nuc_row_adj;
+			nuc_tfpa_px += nuc_row_adj;
+			nuc_vgsk    += nuc_row_adj;
+			nuc_vgsk2   += nuc_row_adj;
+			nuc_vgsk_px += nuc_row_adj;
 		}
 	} else if (cal->cur_set != CAL_SETS) {
-		for (size_t i = 0; i < FRAME_PIXELS; ++i) {
-			float px = pixels[i];
-			float tp = tfpa * px;
-			float t2 = cal->nuc_tfpa2[i] * tfpa + cal->nuc_tfpa[i];
-			float tp2 = cal->nuc_tfpa2_px2[i] * tp + cal->nuc_tfpa_px[i];
-			float sum = cal->nuc_px4[i] * px + cal->nuc_px3[i];
-			sum = sum * px + cal->nuc_px2[i];
-			sum = sum * px + cal->nuc_px[i];
-			sum = sum * px + cal->nuc_offset[i];
-			sum += t2 * tfpa;
-			sum += tp2 * tp;
+		const float *nuc_live      = &cal->nuc_live[nuc_start];
+		const float *nuc_offset    = &cal->nuc_offset[nuc_start];
+		const float *nuc_px        = &cal->nuc_px[nuc_start];
+		const float *nuc_px2       = &cal->nuc_px2[nuc_start];
+		const float *nuc_px3       = &cal->nuc_px3[nuc_start];
+		const float *nuc_px4       = &cal->nuc_px4[nuc_start];
+		const float *nuc_tfpa      = &cal->nuc_tfpa[nuc_start];
+		const float *nuc_tfpa2     = &cal->nuc_tfpa2[nuc_start];
+		const float *nuc_tfpa_px   = &cal->nuc_tfpa_px[nuc_start];
+		const float *nuc_tfpa2_px2 = &cal->nuc_tfpa2_px2[nuc_start];
 
-			int new = (int)sum;
-			out[i] = new;
+		for (size_t y = cal->img_h; y; --y) {
+			for (size_t x = cal->img_w; x; --x) {
+				float px = *pixels++;
+				float tp = tfpa * px;
+				float t2 = *nuc_tfpa2++ * tfpa + *nuc_tfpa++;
+				float tp2 = *nuc_tfpa2_px2++ * tp + *nuc_tfpa_px++;
+				float sum = *nuc_px4++ * px + *nuc_px3++;
+				sum = sum * px + *nuc_px2++;
+				sum = sum * px + *nuc_px++;
+				sum = sum * px + *nuc_offset++;
+				sum += t2 * tfpa;
+				sum += tp2 * tp;
 
-			// only bother updating min/max if the pixel isn't dead
-			if (cal->nuc_live[i]) {
-				if (new > frame_max) {
-					frame_max = new;
-				}
-				if (new < frame_min) {
-					frame_min = new;
+				int new = (int)sum;
+				*out++ = new;
+
+				// only bother updating min/max if the pixel isn't dead
+				if (*nuc_live++) {
+					if (new > frame_max) {
+						frame_max = new;
+					}
+					if (new < frame_min) {
+						frame_min = new;
+					}
 				}
 			}
+			nuc_live      += nuc_row_adj;
+			nuc_offset    += nuc_row_adj;
+			nuc_px        += nuc_row_adj;
+			nuc_px2       += nuc_row_adj;
+			nuc_px3       += nuc_row_adj;
+			nuc_px4       += nuc_row_adj;
+			nuc_tfpa      += nuc_row_adj;
+			nuc_tfpa2     += nuc_row_adj;
+			nuc_tfpa_px   += nuc_row_adj;
+			nuc_tfpa2_px2 += nuc_row_adj;
 		}
 	} else {
-		for (size_t i = 0; i < FRAME_PIXELS; ++i) {
-			float px = pixels[i];
-			float sum = px + cal->nuc_offset[i];
+		const float *nuc_live   = &cal->nuc_live[nuc_start];
+		const float *nuc_offset = &cal->nuc_offset[nuc_start];
 
-			int new = (int)sum;
-			out[i] = new;
+		for (size_t y = cal->img_h; y; --y) {
+			for (size_t x = cal->img_w; x; --x) {
+				float px = *pixels++;
+				float sum = px + *nuc_offset++;
 
-			// only bother updating min/max if the pixel isn't dead
-			if (cal->nuc_live[i]) {
-				if (new > frame_max) {
-					frame_max = new;
-				}
-				if (new < frame_min) {
-					frame_min = new;
+				int new = (int)sum;
+				*out++ = new;
+
+				// only bother updating min/max if the pixel isn't dead
+				if (*nuc_live++) {
+					if (new > frame_max) {
+						frame_max = new;
+					}
+					if (new < frame_min) {
+						frame_min = new;
+					}
 				}
 			}
+			nuc_live   += nuc_row_adj;
+			nuc_offset += nuc_row_adj;
 		}
 	}
 	*min = frame_min;

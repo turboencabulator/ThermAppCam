@@ -13,19 +13,17 @@
 
 #define HEADER_SIZE       64
 #define FRAME_WIDTH_MIN   80
-#define FRAME_WIDTH      384
+#define FRAME_WIDTH_MAX  640
 #define FRAME_HEIGHT_MIN  80
-#define FRAME_HEIGHT     288
+#define FRAME_HEIGHT_MAX 480
 #define FRAME_PIXELS_MIN (FRAME_WIDTH_MIN * FRAME_HEIGHT_MIN)
-#define FRAME_PIXELS     (FRAME_WIDTH * FRAME_HEIGHT)
-#define FRAME_SIZE_MIN   (HEADER_SIZE + 2*FRAME_PIXELS_MIN)
-#define FRAME_SIZE       (HEADER_SIZE + 2*FRAME_PIXELS)
+#define FRAME_PIXELS_MAX (FRAME_WIDTH_MAX * FRAME_HEIGHT_MAX)
 
 // Device apparently only works with wMaxPacketSize (512-byte) packets of data.
 // Note the frame is padded to a multiple of 512 bytes.
 #define PACKET_SIZE      512
-#define BULK_SIZE_MIN    ((FRAME_SIZE_MIN+PACKET_SIZE-1) & ~(PACKET_SIZE-1))
-#define BULK_SIZE_MAX    ((FRAME_SIZE+PACKET_SIZE-1) & ~(PACKET_SIZE-1))
+#define BULK_SIZE_MIN    ((HEADER_SIZE + 2*FRAME_PIXELS_MIN + PACKET_SIZE-1) & ~(PACKET_SIZE-1))
+#define BULK_SIZE_MAX    ((HEADER_SIZE + 2*FRAME_PIXELS_MAX + PACKET_SIZE-1) & ~(PACKET_SIZE-1))
 
 enum thermapp_cal_set {
 	CAL_SET_NV,
@@ -99,6 +97,13 @@ struct thermapp_cal {
 	uint16_t hardware_num;
 	uint16_t firmware_num;
 
+	size_t img_w;
+	size_t img_h;
+	size_t nuc_w;
+	size_t nuc_h;
+	size_t ofs_x;
+	size_t ofs_y;
+
 	enum thermapp_cal_set cur_set;
 
 	// non-owning pointers to per-pixel arrays
@@ -160,8 +165,8 @@ struct thermapp_cal {
 	uint32_t valid[CAL_SETS];
 
 	// storage for auto-generated calibration
-	float auto_live[FRAME_PIXELS];
-	float auto_offset[FRAME_PIXELS];
+	float auto_live[FRAME_PIXELS_MAX];
+	float auto_offset[FRAME_PIXELS_MAX];
 };
 
 

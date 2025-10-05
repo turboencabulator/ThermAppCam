@@ -177,7 +177,7 @@ main(int argc, char *argv[])
 			printf("Hardware number: %" PRIu16 "\n", thermcal->hardware_num);
 			printf("Firmware number: %" PRIu16 "\n", thermcal->firmware_num);
 
-			img_sz = v4l2_format_select(fdwr, FRAME_FORMAT, FRAME_WIDTH, FRAME_HEIGHT);
+			img_sz = v4l2_format_select(fdwr, FRAME_FORMAT, thermcal->img_w, thermcal->img_h);
 			if (!img_sz) {
 				ret = EXIT_FAILURE;
 				break;
@@ -192,7 +192,7 @@ main(int argc, char *argv[])
 			}
 
 			// Data in the U/V planes (when present) does not change.
-			for (size_t i = FRAME_PIXELS; i < img_sz; ++i) {
+			for (size_t i = thermcal->img_w * thermcal->img_h; i < img_sz; ++i) {
 				img[i] = 128;
 			}
 
@@ -204,20 +204,28 @@ main(int argc, char *argv[])
 			continue;
 		}
 
-		if (frame.header.data_w != FRAME_WIDTH
-		 || frame.header.data_h != FRAME_HEIGHT) {
+		if (frame.header.data_w != thermcal->img_w
+		 || frame.header.data_h != thermcal->img_h) {
 			continue;
 		}
 
-		const uint16_t *pixels = (const uint16_t *)&frame.bytes[frame.header.data_offset];
 #ifndef FRAME_RAW
 		if (autocal_frame) {
 			autocal_frame -= 1;
 			printf("\rCaptured calibration frame %d/50. Keep lens covered.", 50 - autocal_frame);
 			fflush(stdout);
 
-			for (size_t i = 0; i < FRAME_PIXELS; ++i) {
-				thermcal->auto_offset[i] += pixels[i];
+			const uint16_t *pixels = (const uint16_t *)&frame.bytes[frame.header.data_offset];
+			size_t nuc_start = thermcal->ofs_y * thermcal->nuc_w + thermcal->ofs_x;
+			size_t nuc_row_adj = thermcal->nuc_w - thermcal->img_w;
+			float *nuc_live, *nuc_offset;
+
+			nuc_offset = &thermcal->auto_offset[nuc_start];
+			for (size_t y = thermcal->img_h; y; --y) {
+				for (size_t x = thermcal->img_w; x; --x) {
+					*nuc_offset++ += *pixels++;
+				}
+				nuc_offset += nuc_row_adj;
 			}
 
 			if (autocal_frame) {
@@ -225,20 +233,31 @@ main(int argc, char *argv[])
 			}
 			printf("\nCalibration finished\n");
 
-			double meancal = 0;
-			for (size_t i = 0; i < FRAME_PIXELS; ++i) {
-				thermcal->auto_offset[i] /= 50.0f;
-				meancal += thermcal->auto_offset[i];
-			}
-			meancal /= FRAME_PIXELS;
-			// record the dead pixels
-			for (size_t i = 0; i < FRAME_PIXELS; ++i) {
-				if (fabs(thermcal->auto_offset[i] - meancal) > 250.0) {
-					printf("Dead pixel ID: %d (%f vs %f)\n", i, thermcal->auto_offset[i], meancal);
-				} else {
-					thermcal->auto_live[i] = 1.0f;
+			double meancal = 0.0;
+			nuc_offset = &thermcal->auto_offset[nuc_start];
+			for (size_t y = thermcal->img_h; y; --y) {
+				for (size_t x = thermcal->img_w; x; --x) {
+					*nuc_offset /= -50.0f;
+					meancal += *nuc_offset++;
 				}
-				thermcal->auto_offset[i] = -thermcal->auto_offset[i];
+				nuc_offset += nuc_row_adj;
+			}
+			meancal /= thermcal->img_w * thermcal->img_h;
+			// record the dead pixels
+			nuc_live   = &thermcal->auto_live[nuc_start];
+			nuc_offset = &thermcal->auto_offset[nuc_start];
+			for (size_t y = thermcal->img_h; y; --y) {
+				for (size_t x = thermcal->img_w; x; --x) {
+					if (fabs(*nuc_offset - meancal) > 250.0) {
+						printf("Dead pixel (%zu,%zu) (%f vs %f)\n", thermcal->img_w - x, thermcal->img_h - y, *nuc_offset, meancal);
+					} else {
+						*nuc_live = 1.0f;
+					}
+					nuc_live   += 1;
+					nuc_offset += 1;
+				}
+				nuc_live   += nuc_row_adj;
+				nuc_offset += nuc_row_adj;
 			}
 		}
 
@@ -261,9 +280,7 @@ main(int argc, char *argv[])
 			temp_therm = thermcal->alpha_thermistor * temp_therm + (1.0 - thermcal->alpha_thermistor) * cur_temp_therm;
 		}
 
-		int uniform[FRAME_PIXELS];
-		int frame_max;
-		int frame_min;
+		int uniform[FRAME_PIXELS_MAX], frame_min, frame_max;
 		thermapp_img_nuc(thermcal, &frame, uniform, &frame_min, &frame_max);
 
 		uint32_t frame_num = frame.header.frame_num_lo
@@ -272,23 +289,39 @@ main(int argc, char *argv[])
 		fflush(stdout);
 
 		// second time through, this time actually scaling data
-		for (size_t i = 0; i < FRAME_PIXELS; ++i) {
-			int x = thermcal->nuc_live[i]
-			      ? (((double)uniform[i] - frame_min)/(frame_max - frame_min)) * (235 - 16) + 16
-			      : 16;
-			if (fliph && flipv) {
-				img[FRAME_PIXELS - i] = x;
-			} else if (fliph) {
-				img[((i/FRAME_WIDTH)+1)*FRAME_WIDTH - i%FRAME_WIDTH - 1] = x;
-			} else if (flipv) {
-				img[FRAME_PIXELS - ((i/FRAME_WIDTH)+1)*FRAME_WIDTH + i%FRAME_WIDTH] = x;
-			} else {
-				img[i] = x;
+		size_t nuc_start = thermcal->ofs_y * thermcal->nuc_w + thermcal->ofs_x;
+		size_t nuc_row_adj = thermcal->nuc_w - thermcal->img_w;
+		const float *nuc_live = &thermcal->nuc_live[nuc_start];
+		const int *in = uniform;
+		uint8_t *out = img;
+		int out_row_adj = 0;
+		int out_col_adj = 1;
+		if (fliph && flipv) {
+			out += thermcal->img_w * thermcal->img_h - 1;
+			out_col_adj = -1;
+		} else if (fliph) {
+			out += thermcal->img_w - 1;
+			out_row_adj = 2 * thermcal->img_w;
+			out_col_adj = -1;
+		} else if (flipv) {
+			out += thermcal->img_w * (thermcal->img_h - 1);
+			out_row_adj = -(2 * thermcal->img_w);
+		}
+		for (size_t y = thermcal->img_h; y; --y) {
+			for (size_t x = thermcal->img_w; x; --x) {
+				int px = *in++;
+				*out = *nuc_live++
+				     ? (((double)px - frame_min)/(frame_max - frame_min)) * (235 - 16) + 16
+				     : 16;
+				out += out_col_adj;
 			}
+			out += out_row_adj;
+			nuc_live += nuc_row_adj;
 		}
 		write(fdwr, img, img_sz);
 #else
-		write(fdwr, pixels, FRAME_PIXELS * sizeof *pixels);
+		const uint16_t *pixels = (const uint16_t *)&frame.bytes[frame.header.data_offset];
+		write(fdwr, pixels, frame.header.data_w * frame.header.data_h * sizeof *pixels);
 #endif
 	}
 

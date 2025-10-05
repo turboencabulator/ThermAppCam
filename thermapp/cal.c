@@ -294,6 +294,9 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 		cal->firmware_num = 7; // ???
 	}
 
+	cal->nuc_w = cal->img_w = header->data_w;
+	cal->nuc_h = cal->img_h = header->data_h;
+
 	// Provide experimental defaults if any calibration data is missing.
 
 	cal->coeffs_fpa_diode[0] = 0.00652 * -14336;
@@ -351,16 +354,30 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 					goto err;
 				}
 
-				// Ensure the reported FPA size matches the expected NUC table size.
-				if (cal->ver_format == 2) {
-					if (header->fpa_w != 640 || header->fpa_h != 480) {
-						goto err;
-					}
-				} else {
-					if (header->fpa_w != 384 || header->fpa_h != 288) {
-						goto err;
-					}
+				// Factory calibration does not support images > FPA size.  Use auto-calibration.
+				if (header->fpa_w < cal->img_w || header->fpa_h < cal->img_h) {
+					goto err;
 				}
+
+				// Ensure the reported FPA size matches the expected NUC table size.
+				// XXX: NUC coefficients may not be valid when image size < FPA size.
+				if (cal->ver_format == 2) {
+					cal->nuc_w = 640;
+					cal->nuc_h = 480;
+				} else {
+					cal->nuc_w = 384;
+					cal->nuc_h = 288;
+				}
+				if (header->fpa_w != cal->nuc_w || header->fpa_h != cal->nuc_h) {
+					goto err;
+				}
+
+				// Image is centered within the NUC table.
+				// If image height/width is odd, image center moves 1/2 px to the S/W of the NUC center.
+				// XXX: May be model-specific or firmware-specific behavior.
+				//      Tested on original ThermApp (HW #4, FW #120).
+				cal->ofs_x = (cal->nuc_w - cal->img_w) / 2;
+				cal->ofs_y = (cal->nuc_h - cal->img_h + 1) / 2;
 			} else if (id == 11) {
 				parse_header(cal, set);
 			} else {

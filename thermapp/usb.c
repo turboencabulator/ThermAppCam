@@ -347,6 +347,8 @@ thermapp_usb_frame_read(struct thermapp_usb_dev *dev, void *buf, size_t len)
 
 	if (len) {
 		dev->frame_done_sz = 0;
+		// TODO: 384x288 cameras apparently provide 12-bit samples, and the app zeros the upper nibble
+		//       of each pixel during the histogram calculation.  If zeroing is necessary, do it here.
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 		memcpy(buf, dev->frame_done, len);
 #else

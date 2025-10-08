@@ -120,6 +120,11 @@ parse_header(struct thermapp_cal *cal, size_t set)
 			for (size_t i = 0; i < 32; ++i) {
 				cal->header[set].cfg.word[i] = (int16_t)read_double(src); src += 8;
 			}
+
+			cal->header[set].vgsk_min = 1392;
+			cal->header[set].vgsk_max = 2949;
+			cal->header[set].histogram_peak_target = 0.5;
+
 			cal->valid[set] |= 1 << id;
 		}
 	} else {
@@ -128,11 +133,12 @@ parse_header(struct thermapp_cal *cal, size_t set)
 			for (size_t i = 0; i < 32; ++i) {
 				cal->header[set].cfg.word[i] = read_word(src); src += 2;
 			}
-			cal->valid[set] |= 1 << id;
 
-			cal->header[set].gsk_voltage_min = read_word(src); src += 2;
-			cal->header[set].gsk_voltage_max = read_word(src); src += 2;
+			cal->header[set].vgsk_min = read_word(src); src += 2;
+			cal->header[set].vgsk_max = read_word(src); src += 2;
 			cal->header[set].histogram_peak_target = read_float(src); src += 4;
+
+			cal->valid[set] |= 1 << id;
 
 			for (size_t i = 0; i < 3; ++i) {
 				cal->header[set].delta_thermistor[i] = read_float(src); src += 4;
@@ -446,6 +452,10 @@ thermapp_cal_select(struct thermapp_cal *cal, enum thermapp_cal_set set)
 		cal->nuc_vgsk_px      = NULL;
 		cal->transient_offset = NULL;
 		cal->transient_delta  = NULL;
+
+		cal->vgsk_min              = 0;
+		cal->vgsk_max              = 0;
+		cal->histogram_peak_target = 0.0;
 	} else {
 		cal->nuc_offset       = (const float *)cal->raw_buf[set][6];
 		cal->nuc_px           = (const float *)cal->raw_buf[set][5];
@@ -461,6 +471,10 @@ thermapp_cal_select(struct thermapp_cal *cal, enum thermapp_cal_set set)
 		cal->nuc_vgsk_px      = (const float *)cal->raw_buf[set][10];
 		cal->transient_offset = (const float *)cal->raw_buf[set][22];
 		cal->transient_delta  = (const float *)cal->raw_buf[set][21];
+
+		cal->vgsk_min              = cal->header[set].vgsk_min;
+		cal->vgsk_max              = cal->header[set].vgsk_max;
+		cal->histogram_peak_target = cal->header[set].histogram_peak_target;
 	}
 	cal->cur_set = set;
 	return 1;

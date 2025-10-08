@@ -123,6 +123,10 @@ struct thermapp_cal {
 	const float *transient_offset; // 22{a,b,c}.bin
 	const float *transient_delta;  // 21{a,b,c}.bin
 
+	uint16_t vgsk_min;
+	uint16_t vgsk_max;
+	double histogram_peak_target;
+
 	// 0.bin
 	uint16_t ver_format;
 	uint16_t ver_data;
@@ -149,8 +153,8 @@ struct thermapp_cal {
 	// 11{,a,b,c}.bin
 	struct {
 		union thermapp_cfg cfg;
-		double gsk_voltage_min;
-		double gsk_voltage_max;
+		uint16_t vgsk_min;
+		uint16_t vgsk_max;
 		double histogram_peak_target;
 		double delta_thermistor[3];
 		float dist_param[5];
@@ -182,6 +186,7 @@ struct thermapp_cal *thermapp_cal_open(const char *, const union thermapp_cfg *)
 int thermapp_cal_select(struct thermapp_cal *, enum thermapp_cal_set);
 void thermapp_cal_close(struct thermapp_cal *);
 
+int thermapp_img_vgsk(const struct thermapp_cal *, const union thermapp_frame *);
 void thermapp_img_nuc(const struct thermapp_cal *, const union thermapp_frame *, int *, int *, int *);
 
 #endif /* THERMAPP_H */

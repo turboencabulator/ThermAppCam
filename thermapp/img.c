@@ -4,6 +4,65 @@
 #include "thermapp.h"
 
 #include <limits.h>
+#include <string.h>
+
+static void
+histogram(int *bins, const uint16_t *pixels, size_t len, int bpp16)
+{
+	memset(bins, 0, 256 * sizeof *bins);
+
+	if (bpp16) {
+		while (len--) {
+			bins[*pixels++ >> 8 & 0xff] += 1;
+		}
+	} else {
+		while (len--) {
+			bins[*pixels++ >> 4 & 0xff] += 1;
+		}
+	}
+}
+
+static double
+center_of_mass(const int *buf, size_t len)
+{
+	double weight = 1.0, sum = 0.0, wsum = 0.0;
+	while (len--) {
+		double sample = (double)*buf++;
+		wsum += weight * sample;
+		sum += sample;
+		weight += 1.0;
+	}
+	return (wsum / sum) - 1.0;
+}
+
+int
+thermapp_img_vgsk(const struct thermapp_cal *cal, const union thermapp_frame *frame)
+{
+	const uint16_t *pixels = (const uint16_t *)&frame->bytes[frame->header.data_offset];
+	int vgsk = frame->header.VoutC;
+	int min = cal->vgsk_min;
+	int max = cal->vgsk_max;
+	double target = cal->histogram_peak_target;
+
+	// XXX: The app skips over this calculation on 640x480 cameras,
+	//      but the skipped code has decisions to handle 640x480 cameras?
+	if (frame->header.fpa_w != 640 && target != 0.0) {
+		if (frame->header.fpa_w == 640) {
+			min = 1392;
+			max = 2949;
+		}
+
+		int bins[256];
+		histogram(bins, pixels, frame->header.data_w * frame->header.data_h, frame->header.fpa_w == 640);
+		double cm = center_of_mass(bins, 256);
+		int delta = (int)(((target * 256.0) - cm) / 7.0);
+		int new = vgsk + delta;
+		if (min < new && new < max) {
+			vgsk = new;
+		}
+	}
+	return vgsk;
+}
 
 void
 thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *frame, int *out, int *min, int *max)

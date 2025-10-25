@@ -281,7 +281,8 @@ main(int argc, char *argv[])
 		}
 
 		int uniform[FRAME_PIXELS_MAX], frame_min, frame_max;
-		thermapp_img_nuc(thermcal, &frame, uniform, &frame_min, &frame_max);
+		thermapp_img_nuc(thermcal, &frame, uniform);
+		thermapp_img_minmax(thermcal, uniform, &frame_min, &frame_max);
 
 		uint32_t frame_num = frame.header.frame_num_lo
 		                   | frame.header.frame_num_hi << 16;

@@ -65,18 +65,15 @@ thermapp_img_vgsk(const struct thermapp_cal *cal, const union thermapp_frame *fr
 }
 
 void
-thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *frame, int *out, int *min, int *max)
+thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *frame, int *out)
 {
 	float tfpa = frame->header.temp_fpa_diode;
 	float vgsk = frame->header.VoutC;
 	const uint16_t *pixels = (const uint16_t *)&frame->bytes[frame->header.data_offset];
 	size_t nuc_start = cal->ofs_y * cal->nuc_w + cal->ofs_x;
 	size_t nuc_row_adj = cal->nuc_w - cal->img_w;
-	int frame_min = INT_MAX;
-	int frame_max = INT_MIN;
 
 	if (cal->cur_set == CAL_SET_NV) {
-		const float *nuc_live    = &cal->nuc_live[nuc_start];
 		const float *nuc_offset  = &cal->nuc_offset[nuc_start];
 		const float *nuc_px      = &cal->nuc_px[nuc_start];
 		const float *nuc_px2     = &cal->nuc_px2[nuc_start];
@@ -99,20 +96,8 @@ thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *fra
 				sum += t2 * tfpa;
 				sum += v2 * vgsk;
 
-				int new = (int)sum;
-				*out++ = new;
-
-				// only bother updating min/max if the pixel isn't dead
-				if (*nuc_live++) {
-					if (new > frame_max) {
-						frame_max = new;
-					}
-					if (new < frame_min) {
-						frame_min = new;
-					}
-				}
+				*out++ = (int)sum;
 			}
-			nuc_live    += nuc_row_adj;
 			nuc_offset  += nuc_row_adj;
 			nuc_px      += nuc_row_adj;
 			nuc_px2     += nuc_row_adj;
@@ -124,7 +109,6 @@ thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *fra
 			nuc_vgsk_px += nuc_row_adj;
 		}
 	} else if (cal->cur_set != CAL_SETS) {
-		const float *nuc_live      = &cal->nuc_live[nuc_start];
 		const float *nuc_offset    = &cal->nuc_offset[nuc_start];
 		const float *nuc_px        = &cal->nuc_px[nuc_start];
 		const float *nuc_px2       = &cal->nuc_px2[nuc_start];
@@ -148,20 +132,8 @@ thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *fra
 				sum += t2 * tfpa;
 				sum += tp2 * tp;
 
-				int new = (int)sum;
-				*out++ = new;
-
-				// only bother updating min/max if the pixel isn't dead
-				if (*nuc_live++) {
-					if (new > frame_max) {
-						frame_max = new;
-					}
-					if (new < frame_min) {
-						frame_min = new;
-					}
-				}
+				*out++ = (int)sum;
 			}
-			nuc_live      += nuc_row_adj;
 			nuc_offset    += nuc_row_adj;
 			nuc_px        += nuc_row_adj;
 			nuc_px2       += nuc_row_adj;
@@ -173,7 +145,6 @@ thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *fra
 			nuc_tfpa2_px2 += nuc_row_adj;
 		}
 	} else {
-		const float *nuc_live   = &cal->nuc_live[nuc_start];
 		const float *nuc_offset = &cal->nuc_offset[nuc_start];
 
 		for (size_t y = cal->img_h; y; --y) {
@@ -181,22 +152,37 @@ thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *fra
 				float px = *pixels++;
 				float sum = px + *nuc_offset++;
 
-				int new = (int)sum;
-				*out++ = new;
-
-				// only bother updating min/max if the pixel isn't dead
-				if (*nuc_live++) {
-					if (new > frame_max) {
-						frame_max = new;
-					}
-					if (new < frame_min) {
-						frame_min = new;
-					}
-				}
+				*out++ = (int)sum;
 			}
-			nuc_live   += nuc_row_adj;
 			nuc_offset += nuc_row_adj;
 		}
+	}
+}
+
+void
+thermapp_img_minmax(const struct thermapp_cal *cal, const int *in, int *min, int *max)
+{
+	size_t nuc_start = cal->ofs_y * cal->nuc_w + cal->ofs_x;
+	size_t nuc_row_adj = cal->nuc_w - cal->img_w;
+	const float *nuc_live = &cal->nuc_live[nuc_start];
+
+	int frame_min = INT_MAX;
+	int frame_max = INT_MIN;
+	for (size_t y = cal->img_h; y; --y) {
+		for (size_t x = cal->img_w; x; --x) {
+			int new = *in++;
+
+			// only bother updating min/max if the pixel isn't dead
+			if (*nuc_live++) {
+				if (new > frame_max) {
+					frame_max = new;
+				}
+				if (new < frame_min) {
+					frame_min = new;
+				}
+			}
+		}
+		nuc_live += nuc_row_adj;
 	}
 	*min = frame_min;
 	*max = frame_max;

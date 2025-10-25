@@ -218,7 +218,7 @@ main(int argc, char *argv[])
 			const uint16_t *pixels = (const uint16_t *)&frame.bytes[frame.header.data_offset];
 			size_t nuc_start = thermcal->ofs_y * thermcal->nuc_w + thermcal->ofs_x;
 			size_t nuc_row_adj = thermcal->nuc_w - thermcal->img_w;
-			float *nuc_live, *nuc_offset;
+			float *nuc_good, *nuc_offset;
 
 			nuc_offset = &thermcal->auto_offset[nuc_start];
 			for (size_t y = thermcal->img_h; y; --y) {
@@ -243,22 +243,23 @@ main(int argc, char *argv[])
 				nuc_offset += nuc_row_adj;
 			}
 			meancal /= thermcal->img_w * thermcal->img_h;
-			// record the dead pixels
-			nuc_live   = &thermcal->auto_live[nuc_start];
+			// record the bad pixels
+			nuc_good   = &thermcal->auto_good[nuc_start];
 			nuc_offset = &thermcal->auto_offset[nuc_start];
 			for (size_t y = thermcal->img_h; y; --y) {
 				for (size_t x = thermcal->img_w; x; --x) {
 					if (fabs(*nuc_offset - meancal) > 250.0) {
-						printf("Dead pixel (%zu,%zu) (%f vs %f)\n", thermcal->img_w - x, thermcal->img_h - y, *nuc_offset, meancal);
+						printf("Bad pixel (%zu,%zu) (%f vs %f)\n", thermcal->img_w - x, thermcal->img_h - y, *nuc_offset, meancal);
 					} else {
-						*nuc_live = 1.0f;
+						*nuc_good = 1.0f;
 					}
-					nuc_live   += 1;
+					nuc_good   += 1;
 					nuc_offset += 1;
 				}
-				nuc_live   += nuc_row_adj;
+				nuc_good   += nuc_row_adj;
 				nuc_offset += nuc_row_adj;
 			}
+			thermapp_cal_bpr_init(thermcal);
 		}
 
 		double raw_temp = frame.header.temp_fpa_diode;
@@ -282,6 +283,7 @@ main(int argc, char *argv[])
 
 		int uniform[FRAME_PIXELS_MAX], frame_min, frame_max;
 		thermapp_img_nuc(thermcal, &frame, uniform);
+		thermapp_img_bpr(thermcal, uniform);
 		thermapp_img_minmax(thermcal, uniform, &frame_min, &frame_max);
 
 		uint32_t frame_num = frame.header.frame_num_lo
@@ -290,9 +292,6 @@ main(int argc, char *argv[])
 		fflush(stdout);
 
 		// second time through, this time actually scaling data
-		size_t nuc_start = thermcal->ofs_y * thermcal->nuc_w + thermcal->ofs_x;
-		size_t nuc_row_adj = thermcal->nuc_w - thermcal->img_w;
-		const float *nuc_live = &thermcal->nuc_live[nuc_start];
 		const int *in = uniform;
 		uint8_t *out = img;
 		int out_row_adj = 0;
@@ -311,13 +310,10 @@ main(int argc, char *argv[])
 		for (size_t y = thermcal->img_h; y; --y) {
 			for (size_t x = thermcal->img_w; x; --x) {
 				int px = *in++;
-				*out = *nuc_live++
-				     ? (((double)px - frame_min)/(frame_max - frame_min)) * (235 - 16) + 16
-				     : 16;
+				*out = (((double)px - frame_min)/(frame_max - frame_min)) * (235 - 16) + 16;
 				out += out_col_adj;
 			}
 			out += out_row_adj;
-			nuc_live += nuc_row_adj;
 		}
 		write(fdwr, img, img_sz);
 #else

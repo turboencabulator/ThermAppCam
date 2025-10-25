@@ -160,29 +160,74 @@ thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *fra
 }
 
 void
-thermapp_img_minmax(const struct thermapp_cal *cal, const int *in, int *min, int *max)
+thermapp_img_bpr(const struct thermapp_cal *cal, int *io)
 {
 	size_t nuc_start = cal->ofs_y * cal->nuc_w + cal->ofs_x;
 	size_t nuc_row_adj = cal->nuc_w - cal->img_w;
-	const float *nuc_live = &cal->nuc_live[nuc_start];
+	const float *nuc_good = &cal->nuc_good[nuc_start];
 
+	// Relative indexes of nearby/neighboring pixels.
+	// rel_0 is positive/forward-looking (reading from a known-good input pixel),
+	// all others are negative/backward-looking (reading from good-or-repaired output).
+	int rel_0 = cal->bpr_i;
+	int rel_w = -1;
+	int rel_n = -cal->img_w;
+	int rel_nw = rel_n - 1;
+	int rel_ne = rel_n + 1;
+
+	// If a pixel is bad, replace it with the average of previously-encountered
+	// neighboring pixels (on the west, northwest, north, and northeast if present).
+	// If none (i.e. the first pixel is bad), copy from a known-good nearby pixel.
+	for (size_t y = 0; y < cal->img_h; ++y) {
+		for (size_t x = 0; x < cal->img_w; ++x) {
+			if (!*nuc_good++) {
+				if (!y) {
+					if (!x) {
+						*io = io[rel_0];
+					} else {
+						*io = io[rel_w];
+					}
+				} else {
+					float avg;
+					if (!x) {
+						avg = io[rel_n]
+						    + io[rel_ne];
+						avg /= 2.0f;
+					} else {
+						avg = io[rel_w]
+						    + io[rel_nw]
+						    + io[rel_n];
+						if (x != cal->img_w - 1) {
+							avg += io[rel_ne];
+							avg /= 4.0f;
+						} else {
+							avg /= 3.0f;
+						}
+					}
+					*io = (int)avg;
+				}
+			}
+			io += 1;
+		}
+		nuc_good += nuc_row_adj;
+	}
+}
+
+void
+thermapp_img_minmax(const struct thermapp_cal *cal, const int *in, int *min, int *max)
+{
 	int frame_min = INT_MAX;
 	int frame_max = INT_MIN;
 	for (size_t y = cal->img_h; y; --y) {
 		for (size_t x = cal->img_w; x; --x) {
 			int new = *in++;
-
-			// only bother updating min/max if the pixel isn't dead
-			if (*nuc_live++) {
-				if (new > frame_max) {
-					frame_max = new;
-				}
-				if (new < frame_min) {
-					frame_min = new;
-				}
+			if (new > frame_max) {
+				frame_max = new;
+			}
+			if (new < frame_min) {
+				frame_min = new;
 			}
 		}
-		nuc_live += nuc_row_adj;
 	}
 	*min = frame_min;
 	*max = frame_max;

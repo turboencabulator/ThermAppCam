@@ -309,7 +309,7 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 	cal->coeffs_fpa_diode[1] = 0.00652;
 
 	cal->cur_set = CAL_SETS;
-	cal->nuc_live = cal->auto_live;
+	cal->nuc_good = cal->auto_good;
 	cal->nuc_offset = cal->auto_offset;
 
 	// Optional: Everything between here and err attempts to read the factory calibration files.
@@ -398,12 +398,45 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 		}
 	}
 
-	if (cal->valid[0] & (1 << 1)) {
-		cal->nuc_live = (const float *)cal->raw_buf[0][1];
-	}
-
 err:
 	return cal;
+}
+
+static size_t
+first_good_index(const struct thermapp_cal *cal)
+{
+	size_t nuc_start = cal->ofs_y * cal->nuc_w + cal->ofs_x;
+	const float *nuc_good = &cal->nuc_good[nuc_start];
+
+	if (!nuc_good[0]) {
+		// First pixel is bad, pick a nearby good pixel to substitute.
+		// Look along the first row, first col, and main diagonal.
+		size_t min_dim = cal->img_w < cal->img_h ? cal->img_w : cal->img_h;
+		for (size_t distance = 1; distance < min_dim; ++distance) {
+			size_t nuc_i = distance;
+			size_t img_i = distance;
+			if (nuc_good[nuc_i]) return img_i;
+			nuc_i *= cal->nuc_w;
+			img_i *= cal->img_w;
+			if (nuc_good[nuc_i]) return img_i;
+			nuc_i += distance;
+			img_i += distance;
+			if (nuc_good[nuc_i]) return img_i;
+		}
+	}
+	return 0;
+}
+
+void
+thermapp_cal_bpr_init(struct thermapp_cal *cal)
+{
+	// Prefer the factory bad pixel map if present.
+	if (cal->valid[0] & (1 << 1)) {
+		cal->nuc_good = (const float *)cal->raw_buf[0][1];
+	}
+
+	// Find an initial good pixel for bad pixel repair.
+	cal->bpr_i = first_good_index(cal);
 }
 
 int

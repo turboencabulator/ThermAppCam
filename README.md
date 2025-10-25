@@ -3,7 +3,7 @@ This fork is designed to allow the Therm-App thermal imaging camera for use as a
 
 ## New features
 * Automatic non-uniformity calibration (keep lens cover on when starting software)
-* Automatic dead pixel detection during the NUC process and correction
+* Automatic bad pixel detection and correction during the NUC process
 * Image range scaling
 * YUV (V4L2_PIX_FMT_YUV420) instead of Grey (V4L2_PIX_FMT_GREY) output for better compatibility with security software (eg. motion or mjpgstreamer)
 * Image is the right way round by default (instead of horizontally flipped)
@@ -73,7 +73,7 @@ The official ThermApp Android app sends other information to the server as part 
 
 ## Todo
 * Histogram Equalization instead of linear image range scaling
-* Smarter dead pixel detection
+* Smarter bad pixel detection
 * Automatically download the camera's factory calibration data
 * Use the camera's factory calibration data
 * Colour LUT support

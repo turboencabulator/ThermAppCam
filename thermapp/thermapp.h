@@ -103,11 +103,12 @@ struct thermapp_cal {
 	size_t nuc_h;
 	size_t ofs_x;
 	size_t ofs_y;
+	size_t bpr_i;
 
 	enum thermapp_cal_set cur_set;
 
 	// non-owning pointers to per-pixel arrays
-	const float *nuc_live;         // 1.bin
+	const float *nuc_good;         // 1.bin
 	const float *nuc_offset;       // 6{,a,b,c}.bin
 	const float *nuc_px;           // 5{,a,b,c}.bin
 	const float *nuc_px2;          // 7{,a,b,c}.bin
@@ -169,7 +170,7 @@ struct thermapp_cal {
 	uint32_t valid[CAL_SETS];
 
 	// storage for auto-generated calibration
-	float auto_live[FRAME_PIXELS_MAX];
+	float auto_good[FRAME_PIXELS_MAX];
 	float auto_offset[FRAME_PIXELS_MAX];
 };
 
@@ -183,11 +184,13 @@ size_t thermapp_usb_cfg_write(struct thermapp_usb_dev *, const void *, size_t, s
 void thermapp_usb_close(struct thermapp_usb_dev *);
 
 struct thermapp_cal *thermapp_cal_open(const char *, const union thermapp_cfg *);
+void thermapp_cal_bpr_init(struct thermapp_cal *);
 int thermapp_cal_select(struct thermapp_cal *, enum thermapp_cal_set);
 void thermapp_cal_close(struct thermapp_cal *);
 
 int thermapp_img_vgsk(const struct thermapp_cal *, const union thermapp_frame *);
 void thermapp_img_nuc(const struct thermapp_cal *, const union thermapp_frame *, int *);
+void thermapp_img_bpr(const struct thermapp_cal *, int *);
 void thermapp_img_minmax(const struct thermapp_cal *, const int *, int *, int *);
 
 #endif /* THERMAPP_H */

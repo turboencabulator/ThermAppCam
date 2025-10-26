@@ -7,7 +7,7 @@
 #include <string.h>
 
 static void
-histogram(int *bins, const uint16_t *pixels, size_t len, int bpp16)
+histogram(unsigned *bins, const uint16_t *pixels, size_t len, int bpp16)
 {
 	memset(bins, 0, 256 * sizeof *bins);
 
@@ -23,7 +23,7 @@ histogram(int *bins, const uint16_t *pixels, size_t len, int bpp16)
 }
 
 static double
-center_of_mass(const int *buf, size_t len)
+center_of_mass(const unsigned *buf, size_t len)
 {
 	double weight = 1.0, sum = 0.0, wsum = 0.0;
 	while (len--) {
@@ -52,7 +52,7 @@ thermapp_img_vgsk(const struct thermapp_cal *cal, const union thermapp_frame *fr
 			max = 2949;
 		}
 
-		int bins[256];
+		unsigned bins[256];
 		histogram(bins, pixels, frame->header.data_w * frame->header.data_h, frame->header.fpa_w == 640);
 		double cm = center_of_mass(bins, 256);
 		int delta = (int)(((target * 256.0) - cm) / 7.0);

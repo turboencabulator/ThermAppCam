@@ -3,7 +3,7 @@
 
 #include "thermapp.h"
 
-#include <limits.h>
+#include <math.h>
 #include <string.h>
 
 static void
@@ -65,7 +65,7 @@ thermapp_img_vgsk(const struct thermapp_cal *cal, const union thermapp_frame *fr
 }
 
 void
-thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *frame, int *out)
+thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *frame, float *out)
 {
 	float tfpa = frame->header.temp_fpa_diode;
 	float vgsk = frame->header.VoutC;
@@ -96,7 +96,7 @@ thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *fra
 				sum += t2 * tfpa;
 				sum += v2 * vgsk;
 
-				*out++ = (int)sum;
+				*out++ = sum;
 			}
 			nuc_offset  += nuc_row_adj;
 			nuc_px      += nuc_row_adj;
@@ -132,7 +132,7 @@ thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *fra
 				sum += t2 * tfpa;
 				sum += tp2 * tp;
 
-				*out++ = (int)sum;
+				*out++ = sum;
 			}
 			nuc_offset    += nuc_row_adj;
 			nuc_px        += nuc_row_adj;
@@ -152,7 +152,7 @@ thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *fra
 				float px = *pixels++;
 				float sum = px + *nuc_offset++;
 
-				*out++ = (int)sum;
+				*out++ = sum;
 			}
 			nuc_offset += nuc_row_adj;
 		}
@@ -160,7 +160,7 @@ thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *fra
 }
 
 void
-thermapp_img_bpr(const struct thermapp_cal *cal, int *io)
+thermapp_img_bpr(const struct thermapp_cal *cal, float *io)
 {
 	size_t nuc_start = cal->ofs_y * cal->nuc_w + cal->ofs_x;
 	size_t nuc_row_adj = cal->nuc_w - cal->img_w;
@@ -204,7 +204,7 @@ thermapp_img_bpr(const struct thermapp_cal *cal, int *io)
 							avg /= 3.0f;
 						}
 					}
-					*io = (int)avg;
+					*io = avg;
 				}
 			}
 			io += 1;
@@ -214,20 +214,14 @@ thermapp_img_bpr(const struct thermapp_cal *cal, int *io)
 }
 
 void
-thermapp_img_minmax(const struct thermapp_cal *cal, const int *in, int *min, int *max)
+thermapp_img_minmax(const struct thermapp_cal *cal, const float *in, float *min, float *max)
 {
-	int frame_min = INT_MAX;
-	int frame_max = INT_MIN;
-	for (size_t y = cal->img_h; y; --y) {
-		for (size_t x = cal->img_w; x; --x) {
-			int new = *in++;
-			if (new > frame_max) {
-				frame_max = new;
-			}
-			if (new < frame_min) {
-				frame_min = new;
-			}
-		}
+	float frame_min = INFINITY;
+	float frame_max = -INFINITY;
+	for (size_t i = cal->img_w * cal->img_h; i; --i) {
+		float px = *in++;
+		frame_min = fminf(frame_min, px);
+		frame_max = fmaxf(frame_max, px);
 	}
 	*min = frame_min;
 	*max = frame_max;

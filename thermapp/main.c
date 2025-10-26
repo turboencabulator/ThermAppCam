@@ -281,18 +281,18 @@ main(int argc, char *argv[])
 			temp_therm = thermcal->alpha_thermistor * temp_therm + (1.0 - thermcal->alpha_thermistor) * cur_temp_therm;
 		}
 
-		int uniform[FRAME_PIXELS_MAX], frame_min, frame_max;
+		float uniform[FRAME_PIXELS_MAX], frame_min, frame_max;
 		thermapp_img_nuc(thermcal, &frame, uniform);
 		thermapp_img_bpr(thermcal, uniform);
 		thermapp_img_minmax(thermcal, uniform, &frame_min, &frame_max);
 
 		uint32_t frame_num = frame.header.frame_num_lo
 		                   | frame.header.frame_num_hi << 16;
-		printf("\rFrame #%" PRIu32 ":  FPA: %f C  Thermistor: %f C  Range: [%d:%d]", frame_num, cur_temp_fpa, cur_temp_therm, frame_min, frame_max);
+		printf("\rFrame #%" PRIu32 ":  FPA: %f C  Thermistor: %f C  Range: [%f:%f]", frame_num, cur_temp_fpa, cur_temp_therm, frame_min, frame_max);
 		fflush(stdout);
 
 		// second time through, this time actually scaling data
-		const int *in = uniform;
+		const float *in = uniform;
 		uint8_t *out = img;
 		int out_row_adj = 0;
 		int out_col_adj = 1;
@@ -309,8 +309,8 @@ main(int argc, char *argv[])
 		}
 		for (size_t y = thermcal->img_h; y; --y) {
 			for (size_t x = thermcal->img_w; x; --x) {
-				int px = *in++;
-				*out = (((double)px - frame_min)/(frame_max - frame_min)) * (235 - 16) + 16;
+				float px = *in++;
+				*out = ((px - frame_min)/(frame_max - frame_min)) * (235 - 16) + 16;
 				out += out_col_adj;
 			}
 			out += out_row_adj;

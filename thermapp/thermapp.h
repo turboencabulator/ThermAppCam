@@ -189,8 +189,8 @@ int thermapp_cal_select(struct thermapp_cal *, enum thermapp_cal_set);
 void thermapp_cal_close(struct thermapp_cal *);
 
 int thermapp_img_vgsk(const struct thermapp_cal *, const union thermapp_frame *);
-void thermapp_img_nuc(const struct thermapp_cal *, const union thermapp_frame *, int *);
-void thermapp_img_bpr(const struct thermapp_cal *, int *);
-void thermapp_img_minmax(const struct thermapp_cal *, const int *, int *, int *);
+void thermapp_img_nuc(const struct thermapp_cal *, const union thermapp_frame *, float *);
+void thermapp_img_bpr(const struct thermapp_cal *, float *);
+void thermapp_img_minmax(const struct thermapp_cal *, const float *, float *, float *);
 
 #endif /* THERMAPP_H */

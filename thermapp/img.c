@@ -226,3 +226,48 @@ thermapp_img_minmax(const struct thermapp_cal *cal, const float *in, float *min,
 	*min = frame_min;
 	*max = frame_max;
 }
+
+void
+thermapp_img_quantize(const struct thermapp_cal *cal, const float *in, uint16_t *out)
+{
+	for (size_t i = cal->img_w * cal->img_h; i; --i) {
+		float px = *in++ + 5000;
+		if (px > UINT16_MAX) {
+			*out++ = UINT16_MAX;
+		} else if (px < 0) {
+			*out++ = 0;
+		} else {
+			*out++ = (int)px;
+		}
+	}
+}
+
+void
+thermapp_img_lut(const struct thermapp_cal *cal, const uint16_t *in, uint8_t *lut)
+{
+	unsigned bins[UINT16_MAX+1];
+	memset(bins, 0, sizeof bins);
+
+	// Compute histogram.
+	for (size_t i = cal->img_w * cal->img_h; i; --i) {
+		bins[*in++] += 1;
+	}
+
+	// Number the non-empty bins from 1 to n.
+	unsigned n = 0;
+	for (size_t i = 0; i < UINT16_MAX+1; ++i) {
+		if (bins[i]) {
+			n += 1;
+		}
+		bins[i] = n;
+	}
+
+	// Scale the bins range-axis from [0:n] to [0:UINT8_MAX], then filter.
+#define LUT_ALPHA 230                    // 230/256 ~= 0.9
+#define LUT_BETA ((1 << 8) - LUT_ALPHA)  //  26/256 ~= 0.1
+	unsigned factor = (UINT8_MAX << 8) / n;
+	for (size_t i = 0; i < UINT16_MAX+1; ++i) {
+		unsigned new = (bins[i] * factor) >> 8;
+		lut[i] = (LUT_ALPHA * lut[i] + LUT_BETA * new) >> 8;
+	}
+}

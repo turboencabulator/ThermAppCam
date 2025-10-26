@@ -155,6 +155,19 @@ main(int argc, char *argv[])
 	int temp_settle_frame = 11;
 	double temp_fpa = 0.0;
 	double temp_therm = 0.0;
+	uint8_t palette_index[UINT16_MAX+1];
+	uint8_t palette[UINT8_MAX+1];
+
+	memset(palette_index, 0, sizeof palette_index);
+	for (size_t i = 0; i < UINT8_MAX+1; ++i) {
+		if (i < 16) {
+			palette[i] = 16;
+		} else if (i > 235) {
+			palette[i] = 235;
+		} else {
+			palette[i] = i;
+		}
+	}
 #endif
 	thermapp_usb_start(thermdev);
 	while (thermapp_usb_transfers_pending(thermdev)) {
@@ -282,9 +295,12 @@ main(int argc, char *argv[])
 		}
 
 		float uniform[FRAME_PIXELS_MAX], frame_min, frame_max;
+		uint16_t quantized[FRAME_PIXELS_MAX];
 		thermapp_img_nuc(thermcal, &frame, uniform);
 		thermapp_img_bpr(thermcal, uniform);
 		thermapp_img_minmax(thermcal, uniform, &frame_min, &frame_max);
+		thermapp_img_quantize(thermcal, uniform, quantized);
+		thermapp_img_lut(thermcal, quantized, palette_index);
 
 		uint32_t frame_num = frame.header.frame_num_lo
 		                   | frame.header.frame_num_hi << 16;
@@ -292,7 +308,7 @@ main(int argc, char *argv[])
 		fflush(stdout);
 
 		// second time through, this time actually scaling data
-		const float *in = uniform;
+		const uint16_t *in = quantized;
 		uint8_t *out = img;
 		int out_row_adj = 0;
 		int out_col_adj = 1;
@@ -309,8 +325,7 @@ main(int argc, char *argv[])
 		}
 		for (size_t y = thermcal->img_h; y; --y) {
 			for (size_t x = thermcal->img_w; x; --x) {
-				float px = *in++;
-				*out = ((px - frame_min)/(frame_max - frame_min)) * (235 - 16) + 16;
+				*out = palette[palette_index[*in++]];
 				out += out_col_adj;
 			}
 			out += out_row_adj;

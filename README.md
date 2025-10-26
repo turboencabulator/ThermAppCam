@@ -72,7 +72,6 @@ The official ThermApp Android app sends other information to the server as part 
 * Make sure the camera is plugged into a USB 2.0-compatible port.  The camera will not work on USB 1.x ports since their max bulk transfer size is < 512 bytes.
 
 ## Todo
-* Histogram Equalization instead of linear image range scaling
 * Smarter bad pixel detection
 * Automatically download the camera's factory calibration data
 * Use the camera's factory calibration data

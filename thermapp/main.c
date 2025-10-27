@@ -15,13 +15,7 @@
 #include <string.h>
 
 #define VIDEO_DEVICE "/dev/video0"
-#undef FRAME_RAW
-
-#ifndef FRAME_RAW
 #define FRAME_FORMAT V4L2_PIX_FMT_YUV420
-#else
-#define FRAME_FORMAT V4L2_PIX_FMT_Y16
-#endif
 
 static size_t
 v4l2_format_select(int fdwr,
@@ -150,7 +144,6 @@ main(int argc, char *argv[])
 
 	union thermapp_frame frame;
 	int ident_frame = 1;
-#ifndef FRAME_RAW
 	int autocal_frame = 50;
 	int temp_settle_frame = 11;
 	double temp_fpa = 0.0;
@@ -168,7 +161,7 @@ main(int argc, char *argv[])
 			palette[i] = i;
 		}
 	}
-#endif
+
 	thermapp_usb_start(thermdev);
 	while (thermapp_usb_transfers_pending(thermdev)) {
 		thermapp_usb_handle_events(thermdev);
@@ -196,7 +189,6 @@ main(int argc, char *argv[])
 				break;
 			}
 
-#ifndef FRAME_RAW
 			img = malloc(img_sz);
 			if (!img) {
 				perror("malloc");
@@ -210,7 +202,6 @@ main(int argc, char *argv[])
 			}
 
 			printf("Calibrating... cover the lens!\n");
-#endif
 
 			// Discard 1st frame, it usually has the header repeated twice
 			// and the data shifted into the pad by a corresponding amount.
@@ -222,7 +213,6 @@ main(int argc, char *argv[])
 			continue;
 		}
 
-#ifndef FRAME_RAW
 		if (autocal_frame) {
 			autocal_frame -= 1;
 			printf("\rCaptured calibration frame %d/50. Keep lens covered.", 50 - autocal_frame);
@@ -331,10 +321,6 @@ main(int argc, char *argv[])
 			out += out_row_adj;
 		}
 		write(fdwr, img, img_sz);
-#else
-		const uint16_t *pixels = (const uint16_t *)&frame.bytes[frame.header.data_offset];
-		write(fdwr, pixels, frame.header.data_w * frame.header.data_h * sizeof *pixels);
-#endif
 	}
 
 done:

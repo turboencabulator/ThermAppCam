@@ -263,11 +263,11 @@ thermapp_img_lut(const struct thermapp_cal *cal, const uint16_t *in, uint8_t *lu
 	}
 
 	// Scale the bins range-axis from [0:n] to [0:UINT8_MAX], then filter.
-#define LUT_ALPHA 230                    // 230/256 ~= 0.9
-#define LUT_BETA ((1 << 8) - LUT_ALPHA)  //  26/256 ~= 0.1
+#define LUT_ALPHA 26                     //  26/256 ~= 0.1
+#define LUT_BETA ((1 << 8) - LUT_ALPHA)  // 230/256 ~= 0.9
 	unsigned factor = (UINT8_MAX << 8) / n;
 	for (size_t i = 0; i < UINT16_MAX+1; ++i) {
 		unsigned new = (bins[i] * factor) >> 8;
-		lut[i] = (LUT_ALPHA * lut[i] + LUT_BETA * new) >> 8;
+		lut[i] = (LUT_BETA * lut[i] + LUT_ALPHA * new) >> 8;
 	}
 }

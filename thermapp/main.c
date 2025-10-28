@@ -280,8 +280,8 @@ main(int argc, char *argv[])
 			temp_fpa   = cur_temp_fpa;
 			temp_therm = cur_temp_therm;
 		} else {
-			temp_fpa   = thermcal->alpha_fpa_diode  * temp_fpa   + (1.0 - thermcal->alpha_fpa_diode)  * cur_temp_fpa;
-			temp_therm = thermcal->alpha_thermistor * temp_therm + (1.0 - thermcal->alpha_thermistor) * cur_temp_therm;
+			temp_fpa   = thermcal->beta_fpa_diode  * temp_fpa   + (1.0 - thermcal->beta_fpa_diode)  * cur_temp_fpa;
+			temp_therm = thermcal->beta_thermistor * temp_therm + (1.0 - thermcal->beta_thermistor) * cur_temp_therm;
 		}
 
 		float uniform[FRAME_PIXELS_MAX], frame_min, frame_max;

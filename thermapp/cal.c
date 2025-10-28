@@ -88,8 +88,8 @@ parse_params(struct thermapp_cal *cal)
 	for (size_t i = 0; i < 6; ++i) {
 		cal->coeffs_thermistor[i] = read_float(src); src += 4;
 	}
-	cal->alpha_fpa_diode  = read_float(src); src += 4;
-	cal->alpha_thermistor = read_float(src); src += 4;
+	cal->beta_fpa_diode  = read_float(src); src += 4;
+	cal->beta_thermistor = read_float(src); src += 4;
 
 	cal->thresh_med_to_lo = read_float(src); src += 4;
 	cal->thresh_lo_to_med = read_float(src); src += 4;

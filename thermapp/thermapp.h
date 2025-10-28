@@ -140,8 +140,8 @@ struct thermapp_cal {
 	float cal_temp_max; // celsius
 	double coeffs_fpa_diode[2];
 	double coeffs_thermistor[6];
-	double alpha_fpa_diode;
-	double alpha_thermistor;
+	double beta_fpa_diode;
+	double beta_thermistor;
 	float thresh_med_to_lo; // celsius
 	float thresh_lo_to_med; // celsius
 	float thresh_hi_to_med; // celsius

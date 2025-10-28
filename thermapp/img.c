@@ -243,6 +243,103 @@ thermapp_img_quantize(const struct thermapp_cal *cal, const float *in, uint16_t 
 }
 
 void
+thermapp_img_hpf(const struct thermapp_cal *cal, uint16_t *io, float enhance_ratio)
+{
+	// Compute HPF(image) as image - LPF(image).
+	// LPF is computed as an exponential-weighted moving average across the image's pixels,
+	// first over each row (left-to-right, then right-to-left, initial state from left column),
+	// then over each column (top-to-bottom, then bottom-to-top, initial state from top row).
+	// enhance_ratio: range = [0.25f:5.0f], default = 1.25f to match the app.
+
+	float alpha = 8.0f * enhance_ratio / 100.0f;
+	if (alpha < 0.0f || 1.0f < alpha) return;
+#define LPF_SCALE 8 // Fixed-point scale factor
+	uint32_t alpha_scaled = alpha * (float)(1 << LPF_SCALE);
+	uint32_t beta_scaled = (1 << LPF_SCALE) - alpha_scaled;
+
+	size_t w = cal->img_w;
+	size_t h = cal->img_h;
+#define LPF_RES 2 // RES:1 input downsampling during LPF
+	size_t w_div = (w + LPF_RES - 1) / LPF_RES;
+	size_t h_div = (h + LPF_RES - 1) / LPF_RES;
+	if (!w_div || !h_div) return;
+	size_t w_mod = w - (w_div - 1) * LPF_RES;
+	size_t h_mod = h - (h_div - 1) * LPF_RES;
+
+#define LPF_WIDTH_MAX  ((FRAME_WIDTH_MAX  + LPF_RES - 1) / LPF_RES)
+#define LPF_HEIGHT_MAX ((FRAME_HEIGHT_MAX + LPF_RES - 1) / LPF_RES)
+	uint32_t sy_buf[LPF_WIDTH_MAX];
+	uint16_t lpf_buf[LPF_WIDTH_MAX * LPF_HEIGHT_MAX];
+
+	uint16_t *lpf = lpf_buf;
+	for (size_t y = 0; y < h_div; ++y) {
+		// First column passed as-is to init the row filter state,
+		*lpf = *io;
+		uint32_t sx_scaled = *lpf << LPF_SCALE;
+
+		io += LPF_RES;
+		lpf += 1;
+
+		for (size_t x = 1; x < w_div; ++x) {
+			// Left-to-right pass on this row.
+			sx_scaled = ((beta_scaled * sx_scaled) >> LPF_SCALE) + (alpha_scaled * *io);
+			*lpf = sx_scaled >> LPF_SCALE;
+
+			io += LPF_RES;
+			lpf += 1;
+		}
+
+		uint32_t *sy_scaled = sy_buf + w_div;
+		for (size_t x = 0; x < w_div; ++x) {
+			io -= LPF_RES;
+			lpf -= 1;
+			sy_scaled -= 1;
+
+			// Right-to-left pass on this row.
+			sx_scaled = ((beta_scaled * sx_scaled) >> LPF_SCALE) + (alpha_scaled * *lpf);
+			// Skip the write-back to lpf, the filter output is used directly below.
+
+			// Top-to-bottom pass on each column.
+			// Init the column filter state on the first row.
+			*sy_scaled = y ? ((beta_scaled * *sy_scaled) + (alpha_scaled * sx_scaled)) >> LPF_SCALE : sx_scaled;
+			*lpf = *sy_scaled >> LPF_SCALE;
+		}
+
+		io += LPF_RES * w;
+		lpf += w_div;
+	}
+
+	for (size_t y = 0; y < h_div; ++y) {
+		io -= LPF_RES * (w - w_div);
+
+		uint32_t *sy_scaled = sy_buf + w_div;
+		for (size_t x = 0; x < w_div; ++x) {
+			io -= LPF_RES;
+			lpf -= 1;
+			sy_scaled -= 1;
+
+			// Bottom-to-top pass on each column.
+			*sy_scaled = ((beta_scaled * *sy_scaled) >> LPF_SCALE) + (alpha_scaled * *lpf);
+			// Skip the write-back to lpf, the filter output is used directly below.
+
+			// s is the low-frequency component.
+			// Subtract it out to leave the high-frequency component.
+			// Result will be centered around 0, shift it to the middle of the range of uint16_t.
+			uint32_t s = *sy_scaled >> LPF_SCALE;
+			s -= UINT16_MAX / 2;
+
+			size_t rows = y ? LPF_RES : h_mod;
+			size_t cols = x ? LPF_RES : w_mod;
+			for (size_t j = 0; j < rows; ++j) {
+				for (size_t i = 0; i < cols; ++i) {
+					io[j * w + i] -= s;
+				}
+			}
+		}
+	}
+}
+
+void
 thermapp_img_lut(const struct thermapp_cal *cal, const uint16_t *in, uint8_t *lut)
 {
 	unsigned bins[UINT16_MAX+1];

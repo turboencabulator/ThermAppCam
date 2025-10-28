@@ -340,7 +340,7 @@ thermapp_img_hpf(const struct thermapp_cal *cal, uint16_t *io, float enhance_rat
 }
 
 void
-thermapp_img_lut(const struct thermapp_cal *cal, const uint16_t *in, uint8_t *lut)
+thermapp_img_lut(const struct thermapp_cal *cal, const uint16_t *in, uint8_t *lut, float ignore_ratio)
 {
 	unsigned bins[UINT16_MAX+1];
 	memset(bins, 0, sizeof bins);
@@ -350,9 +350,27 @@ thermapp_img_lut(const struct thermapp_cal *cal, const uint16_t *in, uint8_t *lu
 		bins[*in++] += 1;
 	}
 
-	// Number the non-empty bins from 1 to n.
+	// Optionally discard outlier bins.
+	// ignore_ratio: range = [0.0f:1.0f), default = 0.0f to match the app,
+	// but in practice should be [0.0f:0.5f) otherwise all bins are discarded.
+	unsigned ignore_px = ignore_ratio * (cal->img_w * cal->img_h);
 	unsigned n = 0;
-	for (size_t i = 0; i < UINT16_MAX+1; ++i) {
+	size_t lo = 0, hi = UINT16_MAX+1;
+	while (n < ignore_px && hi) {
+		hi -= 1;
+		n += bins[hi];
+		bins[hi] = 0;
+	}
+	n = 0;
+	while (n < ignore_px && lo < hi) {
+		n += bins[lo];
+		bins[lo] = 0;
+		lo += 1;
+	}
+
+	// Number the non-empty bins from 1 to n.
+	n = 0;
+	for (size_t i = lo; i < UINT16_MAX+1; ++i) {
 		if (bins[i]) {
 			n += 1;
 		}
@@ -362,7 +380,7 @@ thermapp_img_lut(const struct thermapp_cal *cal, const uint16_t *in, uint8_t *lu
 	// Scale the bins range-axis from [0:n] to [0:UINT8_MAX], then filter.
 #define LUT_ALPHA 26                     //  26/256 ~= 0.1
 #define LUT_BETA ((1 << 8) - LUT_ALPHA)  // 230/256 ~= 0.9
-	unsigned factor = (UINT8_MAX << 8) / n;
+	unsigned factor = n ? (UINT8_MAX << 8) / n : 0;
 	for (size_t i = 0; i < UINT16_MAX+1; ++i) {
 		unsigned new = (bins[i] * factor) >> 8;
 		lut[i] = (LUT_BETA * lut[i] + LUT_ALPHA * new) >> 8;

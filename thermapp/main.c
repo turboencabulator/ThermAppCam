@@ -291,7 +291,7 @@ main(int argc, char *argv[])
 		thermapp_img_minmax(thermcal, uniform, &frame_min, &frame_max);
 		thermapp_img_quantize(thermcal, uniform, quantized);
 		//thermapp_img_hpf(thermcal, quantized, 1.25f);
-		thermapp_img_lut(thermcal, quantized, palette_index);
+		thermapp_img_lut(thermcal, quantized, palette_index, 0.0f);
 
 		uint32_t frame_num = frame.header.frame_num_lo
 		                   | frame.header.frame_num_hi << 16;

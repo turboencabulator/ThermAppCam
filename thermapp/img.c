@@ -340,7 +340,7 @@ thermapp_img_hpf(const struct thermapp_cal *cal, uint16_t *io, float enhance_rat
 }
 
 void
-thermapp_img_lut(const struct thermapp_cal *cal, const uint16_t *in, uint8_t *lut, float ignore_ratio)
+thermapp_img_lut(const struct thermapp_cal *cal, const uint16_t *in, uint8_t *lut, float ignore_ratio, float max_gain)
 {
 	unsigned bins[UINT16_MAX+1];
 	memset(bins, 0, sizeof bins);
@@ -378,11 +378,20 @@ thermapp_img_lut(const struct thermapp_cal *cal, const uint16_t *in, uint8_t *lu
 	}
 
 	// Scale the bins range-axis from [0:n] to [0:UINT8_MAX], then filter.
+	// max_gain, when enabled: 3.0f (TH, Enhanced), 0.45f (TH, Thermography), 1.0f (otherwise) to match the app.
+#define LUT_SCALE 8
+#define LUT_RANGE_SCALED (((UINT8_MAX+1) << LUT_SCALE) - 1)
+	unsigned offset_scaled = 0;
+	unsigned gain_scaled = n ? LUT_RANGE_SCALED / n : 0;
+	unsigned max_gain_scaled = max_gain * (float)(1 << LUT_SCALE);
+	if (max_gain_scaled && gain_scaled > max_gain_scaled) {
+		gain_scaled = max_gain_scaled;
+		offset_scaled = (LUT_RANGE_SCALED - (n * gain_scaled)) / 2;
+	}
+	for (size_t i = 0; i < UINT16_MAX+1; ++i) {
+		unsigned new = (gain_scaled * bins[i] + offset_scaled) >> LUT_SCALE;
 #define LUT_ALPHA 26                     //  26/256 ~= 0.1
 #define LUT_BETA ((1 << 8) - LUT_ALPHA)  // 230/256 ~= 0.9
-	unsigned factor = n ? (UINT8_MAX << 8) / n : 0;
-	for (size_t i = 0; i < UINT16_MAX+1; ++i) {
-		unsigned new = (bins[i] * factor) >> 8;
 		lut[i] = (LUT_BETA * lut[i] + LUT_ALPHA * new) >> 8;
 	}
 }

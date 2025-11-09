@@ -65,7 +65,7 @@ thermapp_img_vgsk(const struct thermapp_cal *cal, const union thermapp_frame *fr
 }
 
 void
-thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *frame, float *out)
+thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *frame, float *out, int comp_en, float temp_delta)
 {
 	float tfpa = frame->header.temp_fpa_diode;
 	float vgsk = frame->header.VoutC;
@@ -109,20 +109,23 @@ thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *fra
 			nuc_vgsk_px += nuc_row_adj;
 		}
 	} else if (cal->cur_set != CAL_SETS) {
-		const float *nuc_offset    = &cal->nuc_offset[nuc_start];
-		const float *nuc_px        = &cal->nuc_px[nuc_start];
-		const float *nuc_px2       = &cal->nuc_px2[nuc_start];
-		const float *nuc_px3       = &cal->nuc_px3[nuc_start];
-		const float *nuc_px4       = &cal->nuc_px4[nuc_start];
-		const float *nuc_tfpa      = &cal->nuc_tfpa[nuc_start];
-		const float *nuc_tfpa2     = &cal->nuc_tfpa2[nuc_start];
-		const float *nuc_tfpa_px   = &cal->nuc_tfpa_px[nuc_start];
-		const float *nuc_tfpa2_px2 = &cal->nuc_tfpa2_px2[nuc_start];
+		const float *nuc_offset       = &cal->nuc_offset[nuc_start];
+		const float *nuc_px           = &cal->nuc_px[nuc_start];
+		const float *nuc_px2          = &cal->nuc_px2[nuc_start];
+		const float *nuc_px3          = &cal->nuc_px3[nuc_start];
+		const float *nuc_px4          = &cal->nuc_px4[nuc_start];
+		const float *nuc_tfpa         = &cal->nuc_tfpa[nuc_start];
+		const float *nuc_tfpa2        = &cal->nuc_tfpa2[nuc_start];
+		const float *nuc_tfpa_px      = &cal->nuc_tfpa_px[nuc_start];
+		const float *nuc_tfpa2_px2    = &cal->nuc_tfpa2_px2[nuc_start];
+		const float *transient_offset = &cal->transient_offset[nuc_start];
+		const float *transient_delta  = &cal->transient_delta[nuc_start];
 
 		for (size_t y = cal->img_h; y; --y) {
 			for (size_t x = cal->img_w; x; --x) {
 				float px = *pixels++;
 				float tp = tfpa * px;
+				float td = *transient_delta++ * temp_delta + *transient_offset++;
 				float t2 = *nuc_tfpa2++ * tfpa + *nuc_tfpa++;
 				float tp2 = *nuc_tfpa2_px2++ * tp + *nuc_tfpa_px++;
 				float sum = *nuc_px4++ * px + *nuc_px3++;
@@ -132,17 +135,29 @@ thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *fra
 				sum += t2 * tfpa;
 				sum += tp2 * tp;
 
+				if (comp_en) {
+					sum += td;
+				}
+
+				if (sum < cal->dist_param[4]) {
+					sum = sum * cal->dist_param[0] + cal->dist_param[1];
+				} else {
+					sum = sum * cal->dist_param[2] + cal->dist_param[3];
+				}
+
 				*out++ = sum;
 			}
-			nuc_offset    += nuc_row_adj;
-			nuc_px        += nuc_row_adj;
-			nuc_px2       += nuc_row_adj;
-			nuc_px3       += nuc_row_adj;
-			nuc_px4       += nuc_row_adj;
-			nuc_tfpa      += nuc_row_adj;
-			nuc_tfpa2     += nuc_row_adj;
-			nuc_tfpa_px   += nuc_row_adj;
-			nuc_tfpa2_px2 += nuc_row_adj;
+			nuc_offset       += nuc_row_adj;
+			nuc_px           += nuc_row_adj;
+			nuc_px2          += nuc_row_adj;
+			nuc_px3          += nuc_row_adj;
+			nuc_px4          += nuc_row_adj;
+			nuc_tfpa         += nuc_row_adj;
+			nuc_tfpa2        += nuc_row_adj;
+			nuc_tfpa_px      += nuc_row_adj;
+			nuc_tfpa2_px2    += nuc_row_adj;
+			transient_offset += nuc_row_adj;
+			transient_delta  += nuc_row_adj;
 		}
 	} else {
 		const float *nuc_offset = &cal->nuc_offset[nuc_start];

@@ -286,7 +286,7 @@ main(int argc, char *argv[])
 
 		float uniform[FRAME_PIXELS_MAX], frame_min, frame_max;
 		uint16_t quantized[FRAME_PIXELS_MAX];
-		thermapp_img_nuc(thermcal, &frame, uniform);
+		thermapp_img_nuc(thermcal, &frame, uniform, 0, temp_therm - temp_fpa);
 		thermapp_img_bpr(thermcal, uniform);
 		thermapp_img_minmax(thermcal, uniform, &frame_min, &frame_max);
 		thermapp_img_quantize(thermcal, uniform, quantized);

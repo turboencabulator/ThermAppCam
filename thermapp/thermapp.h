@@ -127,6 +127,8 @@ struct thermapp_cal {
 	uint16_t vgsk_min;
 	uint16_t vgsk_max;
 	double histogram_peak_target;
+	const double *delta_thermistor;
+	const float *dist_param;
 
 	// 0.bin
 	uint16_t ver_format;

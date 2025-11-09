@@ -51,7 +51,7 @@ read_string(char *dst, unsigned char *src, size_t len)
 	dst[len] = '\0';
 }
 
-static void
+static int
 parse_params(struct thermapp_cal *cal)
 {
 	size_t set = 0;
@@ -61,7 +61,7 @@ parse_params(struct thermapp_cal *cal)
 
 	// TODO: Do all fields exist in all versions?
 	if (!src || len != 0x98) {
-		return;
+		return 0;
 	}
 
 	// ver_format:
@@ -101,22 +101,18 @@ parse_params(struct thermapp_cal *cal)
 	cal->delta_temp_min      = read_float(src); src += 4;
 	cal->transient_step_time = read_float(src); src += 4;
 
-	cal->valid[set] |= 1 << id;
+	return 1;
 }
 
-static void
+static int
 parse_header(struct thermapp_cal *cal, size_t set)
 {
 	size_t id = 11;
 	unsigned char *src = cal->raw_buf[set][id];
 	size_t len = cal->raw_len[set][id];
 
-	if (!src) {
-		return;
-	}
-
 	if (cal->ver_format == 0) {
-		if (len == 0x100) {
+		if (src && len == 0x100) {
 			for (size_t i = 0; i < 32; ++i) {
 				cal->header[set].cfg.word[i] = (int16_t)read_double(src); src += 8;
 			}
@@ -125,11 +121,13 @@ parse_header(struct thermapp_cal *cal, size_t set)
 			cal->header[set].vgsk_max = 2949;
 			cal->header[set].histogram_peak_target = 0.5;
 
-			cal->valid[set] |= 1 << id;
+			// TODO: Populate delta_thermistor, dist_param?
+
+			return 1;
 		}
 	} else {
 		// TODO: Do all fields exist in all versions?
-		if (len == 0x68) {
+		if (src && len == 0x68) {
 			for (size_t i = 0; i < 32; ++i) {
 				cal->header[set].cfg.word[i] = read_word(src); src += 2;
 			}
@@ -138,56 +136,55 @@ parse_header(struct thermapp_cal *cal, size_t set)
 			cal->header[set].vgsk_max = read_word(src); src += 2;
 			cal->header[set].histogram_peak_target = read_float(src); src += 4;
 
-			cal->valid[set] |= 1 << id;
-
 			for (size_t i = 0; i < 3; ++i) {
 				cal->header[set].delta_thermistor[i] = read_float(src); src += 4;
 			}
 			for (size_t i = 0; i < 5; ++i) {
 				cal->header[set].dist_param[i] = read_float(src); src += 4;
 			}
-			cal->valid[set] |= 1 << CAL_FILES;
+
+			return 1;
 		}
 	}
+
+	return 0;
 }
 
-static void
+static int
 parse_nuc(struct thermapp_cal *cal, size_t set, size_t id)
 {
 	unsigned char *src = cal->raw_buf[set][id];
 	float *dst = (float *)src;
 	size_t len = cal->raw_len[set][id];
 
-	if (!src) {
-		return;
-	}
-
 	if (cal->ver_format == 0) {
-		if (len == 384 * 288 * 8) {
+		if (src && len == 384 * 288 * 8) {
 			for (size_t i = 0; i < 384 * 288; ++i) {
 				*dst++ = (float)read_double(src); src += 8;
 			}
-			cal->valid[set] |= 1 << id;
+			return 1;
 		}
 	} else if (cal->ver_format == 1) {
-		if (len == 384 * 288 * 4) {
+		if (src && len == 384 * 288 * 4) {
 #if __BYTE_ORDER != __LITTLE_ENDIAN
 			for (size_t i = 0; i < 384 * 288; ++i) {
 				*dst++ = read_float(src); src += 4;
 			}
 #endif
-			cal->valid[set] |= 1 << id;
+			return 1;
 		}
 	} else if (cal->ver_format == 2) {
-		if (len == 640 * 480 * 4) {
+		if (src && len == 640 * 480 * 4) {
 #if __BYTE_ORDER != __LITTLE_ENDIAN
 			for (size_t i = 0; i < 640 * 480; ++i) {
 				*dst++ = read_float(src); src += 4;
 			}
 #endif
-			cal->valid[set] |= 1 << id;
+			return 1;
 		}
 	}
+
+	return 0;
 }
 
 static const char *leaf_names[CAL_FILES][CAL_SETS] = {
@@ -351,12 +348,13 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 		for (size_t id = 0; id < CAL_FILES; ++id) {
 			read_leaf(cal, set, id);
 
+			int valid;
 			if (id == 0 && set == 0) {
-				parse_params(cal);
+				valid = parse_params(cal);
 
 				// Interpretation of all other files depend on version constants in this first file.
 				// Abort if first file is missing/corrupt.
-				if (!(cal->valid[set] & (1 << id))) {
+				if (!valid) {
 					goto err;
 				}
 
@@ -385,10 +383,11 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 				cal->ofs_x = (cal->nuc_w - cal->img_w) / 2;
 				cal->ofs_y = (cal->nuc_h - cal->img_h + 1) / 2;
 			} else if (id == 11) {
-				parse_header(cal, set);
+				valid = parse_header(cal, set);
 			} else {
-				parse_nuc(cal, set, id);
+				valid = parse_nuc(cal, set, id);
 			}
+			cal->valid[set] |= !!valid << id;
 		}
 
 		// Only set NV (0) is expected to exist for non-TH devices.
@@ -442,8 +441,8 @@ thermapp_cal_bpr_init(struct thermapp_cal *cal)
 int
 thermapp_cal_select(struct thermapp_cal *cal, enum thermapp_cal_set set)
 {
-#define CAL_VALID_NV    0xffc
-#define CAL_VALID_TH 0x7c08fc
+#define CAL_VALID_NV    0xffc // {2..11}.bin
+#define CAL_VALID_TH 0x7c08fc // {{2..7},11,{18..22}}{a,b,c}.bin
 	switch (set) {
 	case CAL_SET_NV:
 		if ((cal->valid[CAL_SET_NV] & CAL_VALID_NV) != CAL_VALID_NV) {
@@ -456,7 +455,12 @@ thermapp_cal_select(struct thermapp_cal *cal, enum thermapp_cal_set set)
 	case CAL_SET_HI:
 		if ((cal->valid[CAL_SET_LO]  & CAL_VALID_TH) != CAL_VALID_TH
 		 || (cal->valid[CAL_SET_MED] & CAL_VALID_TH) != CAL_VALID_TH
-		 || (cal->valid[CAL_SET_HI]  & CAL_VALID_TH) != CAL_VALID_TH) {
+		 || (cal->valid[CAL_SET_HI]  & CAL_VALID_TH) != CAL_VALID_TH
+		// XXX: The app gates selection of these sets by cal->ver_data >= 1 only,
+		//      but I suspect they meant cal->ver_format >= 1 for the dist_param
+		//      fields in 11{a,b,c}.bin.  Gate by both in case I've missed something.
+		 || cal->ver_format < 1
+		 || cal->ver_data   < 1) {
 			return 0;
 		}
 		break;
@@ -489,6 +493,8 @@ thermapp_cal_select(struct thermapp_cal *cal, enum thermapp_cal_set set)
 		cal->vgsk_min              = 0;
 		cal->vgsk_max              = 0;
 		cal->histogram_peak_target = 0.0;
+		cal->delta_thermistor      = NULL;
+		cal->dist_param            = NULL;
 	} else {
 		cal->nuc_offset       = (const float *)cal->raw_buf[set][6];
 		cal->nuc_px           = (const float *)cal->raw_buf[set][5];
@@ -508,6 +514,8 @@ thermapp_cal_select(struct thermapp_cal *cal, enum thermapp_cal_set set)
 		cal->vgsk_min              = cal->header[set].vgsk_min;
 		cal->vgsk_max              = cal->header[set].vgsk_max;
 		cal->histogram_peak_target = cal->header[set].histogram_peak_target;
+		cal->delta_thermistor      = cal->header[set].delta_thermistor;
+		cal->dist_param            = cal->header[set].dist_param;
 	}
 	cal->cur_set = set;
 	return 1;

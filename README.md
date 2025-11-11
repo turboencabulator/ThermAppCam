@@ -62,6 +62,8 @@ The official ThermApp Android app sends other information to the server as part 
 <dd>Directory containing calibration data.  This directory should contain a subdirectory with the same name as your camera's serial number.</dd>
 <dt><code>-d device</code></dt>
 <dd>Send video to a particular video device.  The default device is <code>/dev/video0</code>.</dd>
+<dt><code>-e[ratio]</code></dt>
+<dd>Enhanced mode, also known as "night vision" mode.  Video frames are high-pass filtered.  The optional ratio is a parameter to this filter, and should be between 0.25 and 5.0 inclusive.  The default ratio is 1.25.  Low values produce a characteristic cold halo around warm objects.  High values produce an effect similar to edge detection.</dd>
 <dt><code>-h</code></dt>
 <dd>Show the help message and exit.</dd>
 </dl>

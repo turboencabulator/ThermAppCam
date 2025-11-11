@@ -258,15 +258,15 @@ thermapp_img_quantize(const struct thermapp_cal *cal, const float *in, uint16_t 
 }
 
 void
-thermapp_img_hpf(const struct thermapp_cal *cal, uint16_t *io, float enhance_ratio)
+thermapp_img_hpf(const struct thermapp_cal *cal, uint16_t *io, float enhanced_ratio)
 {
 	// Compute HPF(image) as image - LPF(image).
 	// LPF is computed as an exponential-weighted moving average across the image's pixels,
 	// first over each row (left-to-right, then right-to-left, initial state from left column),
 	// then over each column (top-to-bottom, then bottom-to-top, initial state from top row).
-	// enhance_ratio: range = [0.25f:5.0f], default = 1.25f to match the app.
+	// enhanced_ratio: range = [0.25f:5.0f], default = 1.25f to match the app.
 
-	float alpha = 8.0f * enhance_ratio / 100.0f;
+	float alpha = 8.0f * enhanced_ratio / 100.0f;
 	if (alpha < 0.0f || 1.0f < alpha) return;
 #define LPF_SCALE 8 // Fixed-point scale factor
 	uint32_t alpha_scaled = alpha * (float)(1 << LPF_SCALE);

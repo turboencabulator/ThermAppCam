@@ -100,8 +100,10 @@ main(int argc, char *argv[])
 	int flipv = 0;
 	const char *caldir = NULL;
 	const char *videodev = VIDEO_DEVICE;
+	enum thermapp_video_mode video_mode = VIDEO_MODE_THERMOGRAPHY;
+	float enhanced_ratio = 1.25f;
 	int opt;
-	while ((opt = getopt(argc, argv, "HVc:d:h")) != -1) {
+	while ((opt = getopt(argc, argv, "HVc:d:e::h")) != -1) {
 		switch (opt) {
 		case 'H':
 			fliph = 0;
@@ -115,12 +117,25 @@ main(int argc, char *argv[])
 		case 'd':
 			videodev = optarg;
 			break;
+		case 'e':
+			video_mode = VIDEO_MODE_ENHANCED;
+			if (optarg) {
+				enhanced_ratio = strtof(optarg, NULL);
+				if (enhanced_ratio < 0.25f) {
+					enhanced_ratio = 0.25f;
+				} else if (enhanced_ratio > 5.0f) {
+					enhanced_ratio = 5.0f;
+				}
+			}
+			break;
 		case 'h':
 			printf("Usage: %s [options]\n", argv[0]);
 			printf("  -H            Flip the image horizontally\n");
 			printf("  -V            Flip the image vertically\n");
 			printf("  -c dir        Path to the calibration directory\n");
 			printf("  -d device     Write frames to selected device [default: " VIDEO_DEVICE "]\n");
+			printf("  -e[ratio]     Enhanced (\"night vision\") video mode\n");
+			printf("                Enhanced ratio: 0.25 to 5.0 [default: 1.25]\n");
 			printf("  -h            Show this help message and exit\n");
 			goto done;
 		default:
@@ -290,7 +305,9 @@ main(int argc, char *argv[])
 		thermapp_img_bpr(thermcal, uniform);
 		thermapp_img_minmax(thermcal, uniform, &frame_min, &frame_max);
 		thermapp_img_quantize(thermcal, uniform, quantized);
-		//thermapp_img_hpf(thermcal, quantized, 1.25f);
+		if (video_mode == VIDEO_MODE_ENHANCED) {
+			thermapp_img_hpf(thermcal, quantized, enhanced_ratio);
+		}
 		thermapp_img_lut(thermcal, quantized, palette_index, 0.0f, 0.0f);
 
 		uint32_t frame_num = frame.header.frame_num_lo

@@ -438,36 +438,69 @@ thermapp_cal_bpr_init(struct thermapp_cal *cal)
 	cal->bpr_i = first_good_index(cal);
 }
 
-int
-thermapp_cal_select(struct thermapp_cal *cal, enum thermapp_cal_set set)
-{
 #define CAL_VALID_NV    0xffc // {2..11}.bin
 #define CAL_VALID_TH 0x7c08fc // {{2..7},11,{18..22}}{a,b,c}.bin
+
+static enum thermapp_cal_set
+select_nv(const struct thermapp_cal *cal)
+{
+	enum thermapp_cal_set set = cal->cur_set;
 	switch (set) {
 	case CAL_SET_NV:
-		if ((cal->valid[CAL_SET_NV] & CAL_VALID_NV) != CAL_VALID_NV) {
-			return 0;
-		}
-		break;
+		// Keep the current set and skip the validity checks, they've already passed at least once.
+		return set;
+	default:
+		// Coming from a set other than NV.  Go to NV if the NV set is valid.
+		return ((cal->valid[CAL_SET_NV] & CAL_VALID_NV) == CAL_VALID_NV) ? CAL_SET_NV : CAL_SETS;
+	}
+}
 
+static enum thermapp_cal_set
+select_th(const struct thermapp_cal *cal)
+{
+	enum thermapp_cal_set set = cal->cur_set;
+	switch (set) {
 	case CAL_SET_LO:
 	case CAL_SET_MED:
 	case CAL_SET_HI:
-		if ((cal->valid[CAL_SET_LO]  & CAL_VALID_TH) != CAL_VALID_TH
-		 || (cal->valid[CAL_SET_MED] & CAL_VALID_TH) != CAL_VALID_TH
-		 || (cal->valid[CAL_SET_HI]  & CAL_VALID_TH) != CAL_VALID_TH
+		// Keep the current set and skip the validity checks, they've already passed at least once.
+		return set;
+	default:
+		// Coming from a set other than {LO,MED,HI}.  Go to MED if {LO,MED,HI} sets are all valid.
+		return (
+		// Validity of sets 1-3 implies cal->cal_type == 2 (is a TH device)
+		// (and 0.bin is also valid for us to determine that).
+		    (cal->valid[CAL_SET_LO]  & CAL_VALID_TH) == CAL_VALID_TH
+		 && (cal->valid[CAL_SET_MED] & CAL_VALID_TH) == CAL_VALID_TH
+		 && (cal->valid[CAL_SET_HI]  & CAL_VALID_TH) == CAL_VALID_TH
 		// XXX: The app gates selection of these sets by cal->ver_data >= 1 only,
 		//      but I suspect they meant cal->ver_format >= 1 for the dist_param
 		//      fields in 11{a,b,c}.bin.  Gate by both in case I've missed something.
-		 || cal->ver_format < 1
-		 || cal->ver_data   < 1) {
-			return 0;
-		}
-		break;
+		 && cal->ver_format >= 1
+		 && cal->ver_data   >= 1) ? CAL_SET_MED : CAL_SETS;
+	}
+}
 
-	default:
-		set = CAL_SETS;
-		break;
+int
+thermapp_cal_select(struct thermapp_cal *cal, enum thermapp_video_mode video_mode, float temp_therm)
+{
+	enum thermapp_cal_set set;
+	if (video_mode == VIDEO_MODE_THERMOGRAPHY
+	 && (set = select_th(cal)) != CAL_SETS) {
+		// Use one of the TH {LO,MED,HI} calibration sets if available.
+		// Switch between them based on temp_therm and hysteresis values.
+		if (temp_therm < cal->thresh_med_to_lo) {
+			set = CAL_SET_LO;
+		} else if (temp_therm > cal->thresh_med_to_hi) {
+			set = CAL_SET_HI;
+		} else if ((set == CAL_SET_LO && temp_therm > cal->thresh_lo_to_med)
+		        || (set == CAL_SET_HI && temp_therm < cal->thresh_hi_to_med)) {
+			set = CAL_SET_MED;
+		}
+	} else {
+		// Non-TH devices use the only available set (NV), even in thermography mode.
+		// If no factory calibration is available, use the automatic calibration.
+		set = select_nv(cal);
 	}
 
 	if (cal->cur_set == set) {

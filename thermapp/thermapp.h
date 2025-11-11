@@ -25,6 +25,11 @@
 #define BULK_SIZE_MIN    ((HEADER_SIZE + 2*FRAME_PIXELS_MIN + PACKET_SIZE-1) & ~(PACKET_SIZE-1))
 #define BULK_SIZE_MAX    ((HEADER_SIZE + 2*FRAME_PIXELS_MAX + PACKET_SIZE-1) & ~(PACKET_SIZE-1))
 
+enum thermapp_video_mode {
+	VIDEO_MODE_ENHANCED,
+	VIDEO_MODE_THERMOGRAPHY,
+};
+
 enum thermapp_cal_set {
 	CAL_SET_NV,
 	CAL_SET_LO,
@@ -187,7 +192,7 @@ void thermapp_usb_close(struct thermapp_usb_dev *);
 
 struct thermapp_cal *thermapp_cal_open(const char *, const union thermapp_cfg *);
 void thermapp_cal_bpr_init(struct thermapp_cal *);
-int thermapp_cal_select(struct thermapp_cal *, enum thermapp_cal_set);
+int thermapp_cal_select(struct thermapp_cal *, enum thermapp_video_mode, float);
 void thermapp_cal_close(struct thermapp_cal *);
 
 int thermapp_img_vgsk(const struct thermapp_cal *, const union thermapp_frame *);

@@ -223,6 +223,26 @@ main(int argc, char *argv[])
 			continue;
 		}
 
+		double raw_temp = frame.header.temp_fpa_diode;
+		double cur_temp_fpa = thermcal->coeffs_fpa_diode[1];
+		cur_temp_fpa = fma(cur_temp_fpa, raw_temp, thermcal->coeffs_fpa_diode[0]);
+		raw_temp = frame.header.temp_thermistor;
+		double cur_temp_therm = thermcal->coeffs_thermistor[5];
+		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[4]);
+		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[3]);
+		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[2]);
+		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[1]);
+		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[0]);
+		if (temp_settle_frame) {
+			temp_settle_frame -= 1;
+			temp_fpa   = cur_temp_fpa;
+			temp_therm = cur_temp_therm;
+		} else {
+			temp_fpa   = thermcal->beta_fpa_diode  * temp_fpa   + (1.0 - thermcal->beta_fpa_diode)  * cur_temp_fpa;
+			temp_therm = thermcal->beta_thermistor * temp_therm + (1.0 - thermcal->beta_thermistor) * cur_temp_therm;
+		}
+
+		// All autocal and image processing below expects the image size to match that of the ident frame.
 		if (frame.header.data_w != thermcal->img_w
 		 || frame.header.data_h != thermcal->img_h) {
 			continue;
@@ -246,6 +266,7 @@ main(int argc, char *argv[])
 				nuc_offset += nuc_row_adj;
 			}
 
+			// Skip image processing until autocal data is ready to use.
 			if (autocal_frame) {
 				continue;
 			}
@@ -280,25 +301,6 @@ main(int argc, char *argv[])
 			thermapp_cal_bpr_init(thermcal);
 		}
 
-		double raw_temp = frame.header.temp_fpa_diode;
-		double cur_temp_fpa = thermcal->coeffs_fpa_diode[1];
-		cur_temp_fpa = fma(cur_temp_fpa, raw_temp, thermcal->coeffs_fpa_diode[0]);
-		raw_temp = frame.header.temp_thermistor;
-		double cur_temp_therm = thermcal->coeffs_thermistor[5];
-		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[4]);
-		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[3]);
-		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[2]);
-		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[1]);
-		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[0]);
-		if (temp_settle_frame) {
-			temp_settle_frame -= 1;
-			temp_fpa   = cur_temp_fpa;
-			temp_therm = cur_temp_therm;
-		} else {
-			temp_fpa   = thermcal->beta_fpa_diode  * temp_fpa   + (1.0 - thermcal->beta_fpa_diode)  * cur_temp_fpa;
-			temp_therm = thermcal->beta_thermistor * temp_therm + (1.0 - thermcal->beta_thermistor) * cur_temp_therm;
-		}
-
 		float uniform[FRAME_PIXELS_MAX], frame_min, frame_max;
 		uint16_t quantized[FRAME_PIXELS_MAX];
 		thermapp_img_nuc(thermcal, &frame, uniform, 0, temp_therm - temp_fpa);
@@ -315,7 +317,6 @@ main(int argc, char *argv[])
 		printf("\rFrame #%" PRIu32 ":  FPA: %f C  Thermistor: %f C  Range: [%f:%f]", frame_num, cur_temp_fpa, cur_temp_therm, frame_min, frame_max);
 		fflush(stdout);
 
-		// second time through, this time actually scaling data
 		const uint16_t *in = quantized;
 		uint8_t *out = img;
 		int out_row_adj = 0;

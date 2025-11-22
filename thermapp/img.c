@@ -65,7 +65,7 @@ thermapp_img_vgsk(const struct thermapp_cal *cal, const union thermapp_frame *fr
 }
 
 void
-thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *frame, float *out, int comp_en, float temp_delta)
+thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *frame, float *out, int transient_enabled, float temp_delta)
 {
 	float tfpa = frame->header.temp_fpa_diode;
 	float vgsk = frame->header.VoutC;
@@ -135,7 +135,7 @@ thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *fra
 				sum += t2 * tfpa;
 				sum += tp2 * tp;
 
-				if (comp_en) {
+				if (transient_enabled) {
 					sum += td;
 				}
 

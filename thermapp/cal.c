@@ -96,10 +96,22 @@ parse_params(struct thermapp_cal *cal)
 	cal->thresh_hi_to_med = read_float(src); src += 4;
 	cal->thresh_med_to_hi = read_float(src); src += 4;
 
-	cal->transient_oper_time = read_float(src); src += 4;
-	cal->delta_temp_max      = read_float(src); src += 4;
-	cal->delta_temp_min      = read_float(src); src += 4;
-	cal->transient_step_time = read_float(src); src += 4;
+	cal->transient_oper_time  = read_float(src); src += 4;
+	cal->temp_delta_max       = read_float(src); src += 4;
+	cal->deriv_temp_delta_min = read_float(src); src += 4;
+	cal->transient_step_time  = read_float(src); src += 4;
+
+	// XXX: Can the file be 8 bytes shorter than expected,
+	//      or are the last 8 bytes not always valid?
+	if (cal->ver_data <= 1) {
+		cal->deriv_temp_delta_min = 0.005;
+		cal->transient_step_time  = 10.0f;
+	}
+	cal->transient_steps_max   = 3;
+	cal->beta_deriv_temp_delta = 0.75;
+
+	// Convert all time units to seconds.
+	cal->transient_oper_time *= 60.0f;
 
 	return 1;
 }

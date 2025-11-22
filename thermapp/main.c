@@ -13,6 +13,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+#define CLOCK_SOURCE CLOCK_MONOTONIC
 
 #define VIDEO_DEVICE "/dev/video0"
 #define FRAME_FORMAT V4L2_PIX_FMT_YUV420
@@ -86,6 +89,15 @@ v4l2_format_select(int fdwr,
 	return ret;
 }
 
+static float
+timespec_delta(struct timespec end, struct timespec start)
+{
+	struct timespec delta;
+	delta.tv_nsec = end.tv_nsec - start.tv_nsec;
+	delta.tv_sec  = end.tv_sec  - start.tv_sec;
+	return (float)delta.tv_sec + (float)delta.tv_nsec / 1e9f;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -157,12 +169,16 @@ main(int argc, char *argv[])
 		goto done;
 	}
 
-	union thermapp_frame frame;
 	int ident_frame = 1;
-	int autocal_frame = 50;
-	int temp_settle_frame = 11;
+	int autocal_frame = 0;
+	int temp_settle_frame = 0;
+	int transient_steps = 0;
 	double temp_fpa = 0.0;
 	double temp_therm = 0.0;
+	double old_temp_delta = 0.0;
+	double old_deriv_temp_delta = 0.0;
+	struct timespec transient_start = { 0 };
+	struct timespec transient_step_start = { 0 };
 	uint8_t palette_index[UINT16_MAX+1];
 	uint8_t palette[UINT8_MAX+1];
 
@@ -181,6 +197,7 @@ main(int argc, char *argv[])
 	while (thermapp_usb_transfers_pending(thermdev)) {
 		thermapp_usb_handle_events(thermdev);
 
+		union thermapp_frame frame;
 		if (!thermapp_usb_frame_read(thermdev, &frame, sizeof frame)) {
 			continue;
 		}
@@ -216,6 +233,16 @@ main(int argc, char *argv[])
 				img[i] = 128;
 			}
 
+			// Restart temp sensor measurements.
+			clock_gettime(CLOCK_SOURCE, &transient_start);
+			transient_step_start = transient_start;
+			transient_steps = thermcal->transient_steps_max;
+			temp_settle_frame = 11;
+			old_temp_delta = NAN;
+			old_deriv_temp_delta = NAN;
+
+			// Restart autocal.
+			autocal_frame = 50;
 			printf("Calibrating... cover the lens!\n");
 
 			// Discard 1st frame, it usually has the header repeated twice
@@ -240,6 +267,31 @@ main(int argc, char *argv[])
 		} else {
 			temp_fpa   = thermcal->beta_fpa_diode  * temp_fpa   + (1.0 - thermcal->beta_fpa_diode)  * cur_temp_fpa;
 			temp_therm = thermcal->beta_thermistor * temp_therm + (1.0 - thermcal->beta_thermistor) * cur_temp_therm;
+		}
+
+		double temp_delta = temp_therm - temp_fpa;
+		if (transient_steps) {
+			struct timespec now;
+			clock_gettime(CLOCK_SOURCE, &now);
+			if (timespec_delta(now, transient_step_start) > thermcal->transient_step_time) {
+				transient_step_start = now;
+				if (timespec_delta(now, transient_start) >= thermcal->transient_oper_time
+				 || fabs(temp_delta) > thermcal->temp_delta_max) {
+					transient_steps = 0;
+				} else if (!isnan(old_temp_delta)) {
+					double deriv_temp_delta = temp_delta - old_temp_delta;
+					if (!isnan(old_deriv_temp_delta)) {
+						deriv_temp_delta = thermcal->beta_deriv_temp_delta * old_deriv_temp_delta + (1.0 - thermcal->beta_deriv_temp_delta) * deriv_temp_delta;
+						if (fabs(deriv_temp_delta) < thermcal->deriv_temp_delta_min) {
+							transient_steps -= 1;
+						} else {
+							transient_steps = thermcal->transient_steps_max;
+						}
+					}
+					old_deriv_temp_delta = deriv_temp_delta;
+				}
+				old_temp_delta = temp_delta;
+			}
 		}
 
 		// All autocal and image processing below expects the image size to match that of the ident frame.
@@ -303,7 +355,7 @@ main(int argc, char *argv[])
 
 		float uniform[FRAME_PIXELS_MAX], frame_min, frame_max;
 		uint16_t quantized[FRAME_PIXELS_MAX];
-		thermapp_img_nuc(thermcal, &frame, uniform, 0, temp_therm - temp_fpa);
+		thermapp_img_nuc(thermcal, &frame, uniform, !!transient_steps, temp_delta);
 		thermapp_img_bpr(thermcal, uniform);
 		thermapp_img_minmax(thermcal, uniform, &frame_min, &frame_max);
 		thermapp_img_quantize(thermcal, uniform, quantized);

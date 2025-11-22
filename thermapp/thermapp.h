@@ -153,10 +153,14 @@ struct thermapp_cal {
 	float thresh_lo_to_med; // celsius
 	float thresh_hi_to_med; // celsius
 	float thresh_med_to_hi; // celsius
-	float transient_oper_time; // minutes
-	float delta_temp_max;
-	float delta_temp_min;
+	float transient_oper_time; // minutes, then converted to seconds
+	double temp_delta_max; // celsius
+	double deriv_temp_delta_min; // celsius/step
 	float transient_step_time; // seconds
+
+	// constants not part of 0.bin
+	int transient_steps_max;
+	double beta_deriv_temp_delta;
 
 	// 11{,a,b,c}.bin
 	struct {

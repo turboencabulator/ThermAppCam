@@ -15,7 +15,7 @@ static const unsigned char preamble[] = {
 };
 
 // These are host-endian, must be converted to little-endian before transfer
-static const union thermapp_cfg initial_cfg = {
+const union thermapp_cfg thermapp_initial_cfg = {
 	.preamble[0] = 0xa5a5,
 	.preamble[1] = 0xa5a5,
 	.preamble[2] = 0xa5a5,
@@ -29,25 +29,25 @@ static const union thermapp_cfg initial_cfg = {
 	//.fpa_w       = 0, // (status)
 	.data_h      = FRAME_HEIGHT_MAX, // (control/status)
 	.data_w      = FRAME_WIDTH_MAX, // (control/status)
-	.data_0d     = 0x0019,
+	.word_0x0d   = 0x0019,
 	//.temp_thermistor = 0, // (status)
 	//.temp_fpa_diode = 0, // (status)
 	.VoutA       = 0x075c,
-	.data_11     = 0x0b85,
+	.word_0x11   = 0x0b85,
 	.VoutC       = 0x05f4,
 	.VoutD       = 0x0800,
 	.VoutE       = 0x0b85,
-	.data_15     = 0x0b85,
-	.data_16     = 0x0000,
-	.data_17     = 0x0570,
-	.data_18     = 0x0b85,
+	.word_0x15   = 0x0b85,
+	.word_0x16   = 0x0000,
+	.word_0x17   = 0x0570,
+	.word_0x18   = 0x0b85,
 	.data_offset = HEADER_SIZE, // (status)
 	//.frame_num_lo = 0, // (status)
 	//.frame_num_hi = 0, // (status)
-	.data_1c     = 0x0050,
-	.data_1d     = 0x0003,
-	.data_1e     = 0x0000,
-	.data_1f     = 0x0fff,
+	.word_0x1c   = 0x0050,
+	.word_0x1d   = 0x0003,
+	.word_0x1e   = 0x0000,
+	.word_0x1f   = 0x0fff,
 };
 
 static size_t
@@ -318,7 +318,7 @@ thermapp_usb_start(struct thermapp_usb_dev *dev)
 	dev->transfer_in->actual_length = 0;
 	transfer_cb_in(dev->transfer_in);
 
-	thermapp_usb_cfg_write(dev, &initial_cfg, 0, sizeof initial_cfg);
+	thermapp_usb_cfg_write(dev, &thermapp_initial_cfg, 0, sizeof thermapp_initial_cfg);
 }
 
 int

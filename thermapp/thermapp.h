@@ -55,25 +55,25 @@ union thermapp_cfg {
 		uint16_t fpa_w;
 		uint16_t data_h;
 		uint16_t data_w;
-		uint16_t data_0d;
+		uint16_t word_0x0d;
 		int16_t  temp_thermistor;
 		uint16_t temp_fpa_diode;
 		uint16_t VoutA; //DCoffset;// AD5628 VoutA, Range: 0V - 2.45V, max 2048
-		uint16_t data_11;
+		uint16_t word_0x11;
 		uint16_t VoutC;//gain;// AD5628 VoutC, Range: 0V - 3.59V, max 2984 ??????
 		uint16_t VoutD;// AD5628 VoutD, Range: 0V - 2.895V, max 2394 ??????
 		uint16_t VoutE;// AD5628 VoutE, Range: 0V - 3.63V, max 2997, FPA VBUS
-		uint16_t data_15;
-		uint16_t data_16;
-		uint16_t data_17;
-		uint16_t data_18;
+		uint16_t word_0x15;
+		uint16_t word_0x16;
+		uint16_t word_0x17;
+		uint16_t word_0x18;
 		uint16_t data_offset; // or header_size?
 		uint16_t frame_num_lo;
 		uint16_t frame_num_hi;
-		uint16_t data_1c;
-		uint16_t data_1d;
-		uint16_t data_1e;
-		uint16_t data_1f;
+		uint16_t word_0x1c;
+		uint16_t word_0x1d;
+		uint16_t word_0x1e;
+		uint16_t word_0x1f;
 	};
 };
 
@@ -185,6 +185,8 @@ struct thermapp_cal {
 	float auto_offset[FRAME_PIXELS_MAX];
 };
 
+
+extern const union thermapp_cfg thermapp_initial_cfg;
 
 struct thermapp_usb_dev *thermapp_usb_open(void);
 void thermapp_usb_start(struct thermapp_usb_dev *);

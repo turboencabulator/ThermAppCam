@@ -108,7 +108,7 @@ thermapp_img_nuc(const struct thermapp_cal *cal, const union thermapp_frame *fra
 			nuc_vgsk2   += nuc_row_adj;
 			nuc_vgsk_px += nuc_row_adj;
 		}
-	} else if (cal->cur_set != CAL_SETS) {
+	} else if (cal->cur_set < CAL_SETS) {
 		const float *nuc_offset       = &cal->nuc_offset[nuc_start];
 		const float *nuc_px           = &cal->nuc_px[nuc_start];
 		const float *nuc_px2          = &cal->nuc_px2[nuc_start];

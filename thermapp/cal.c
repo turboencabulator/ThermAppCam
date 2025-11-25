@@ -498,7 +498,7 @@ thermapp_cal_select(struct thermapp_cal *cal, enum thermapp_video_mode video_mod
 {
 	enum thermapp_cal_set set;
 	if (video_mode == VIDEO_MODE_THERMOGRAPHY
-	 && (set = select_th(cal)) != CAL_SETS) {
+	 && (set = select_th(cal)) < CAL_SETS) {
 		// Use one of the TH {LO,MED,HI} calibration sets if available.
 		// Switch between them based on temp_therm and hysteresis values.
 		if (temp_therm < cal->thresh_med_to_lo) {
@@ -519,28 +519,7 @@ thermapp_cal_select(struct thermapp_cal *cal, enum thermapp_video_mode video_mod
 		return 0;
 	}
 
-	if (set == CAL_SETS) {
-		cal->nuc_offset       = cal->auto_offset;
-		cal->nuc_px           = NULL;
-		cal->nuc_px2          = NULL;
-		cal->nuc_px3          = NULL;
-		cal->nuc_px4          = NULL;
-		cal->nuc_tfpa         = NULL;
-		cal->nuc_tfpa2        = NULL;
-		cal->nuc_tfpa_px      = NULL;
-		cal->nuc_tfpa2_px2    = NULL;
-		cal->nuc_vgsk         = NULL;
-		cal->nuc_vgsk2        = NULL;
-		cal->nuc_vgsk_px      = NULL;
-		cal->transient_offset = NULL;
-		cal->transient_delta  = NULL;
-
-		cal->vgsk_min              = 0;
-		cal->vgsk_max              = 0;
-		cal->histogram_peak_target = 0.0;
-		cal->delta_thermistor      = NULL;
-		cal->dist_param            = NULL;
-	} else {
+	if (set < CAL_SETS) {
 		cal->nuc_offset       = (const float *)cal->raw_buf[set][6];
 		cal->nuc_px           = (const float *)cal->raw_buf[set][5];
 		cal->nuc_px2          = (const float *)cal->raw_buf[set][7];
@@ -561,6 +540,27 @@ thermapp_cal_select(struct thermapp_cal *cal, enum thermapp_video_mode video_mod
 		cal->histogram_peak_target = cal->header[set].histogram_peak_target;
 		cal->delta_thermistor      = cal->header[set].delta_thermistor;
 		cal->dist_param            = cal->header[set].dist_param;
+	} else {
+		cal->nuc_offset       = cal->auto_offset;
+		cal->nuc_px           = NULL;
+		cal->nuc_px2          = NULL;
+		cal->nuc_px3          = NULL;
+		cal->nuc_px4          = NULL;
+		cal->nuc_tfpa         = NULL;
+		cal->nuc_tfpa2        = NULL;
+		cal->nuc_tfpa_px      = NULL;
+		cal->nuc_tfpa2_px2    = NULL;
+		cal->nuc_vgsk         = NULL;
+		cal->nuc_vgsk2        = NULL;
+		cal->nuc_vgsk_px      = NULL;
+		cal->transient_offset = NULL;
+		cal->transient_delta  = NULL;
+
+		cal->vgsk_min              = 0;
+		cal->vgsk_max              = 0;
+		cal->histogram_peak_target = 0.0;
+		cal->delta_thermistor      = NULL;
+		cal->dist_param            = NULL;
 	}
 	cal->cur_set = set;
 	return 1;

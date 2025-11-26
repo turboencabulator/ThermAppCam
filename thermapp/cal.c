@@ -494,7 +494,7 @@ select_th(const struct thermapp_cal *cal)
 }
 
 int
-thermapp_cal_select(struct thermapp_cal *cal, enum thermapp_video_mode video_mode, float temp_therm)
+thermapp_cal_select(struct thermapp_cal *cal, struct thermapp_usb_dev *dev, enum thermapp_video_mode video_mode, float temp_therm)
 {
 	enum thermapp_cal_set set;
 	if (video_mode == VIDEO_MODE_THERMOGRAPHY
@@ -520,6 +520,7 @@ thermapp_cal_select(struct thermapp_cal *cal, enum thermapp_video_mode video_mod
 	}
 
 	if (set < CAL_SETS) {
+		// XXX: Changes to calibration constants take effect before the matching header is sent.
 		cal->nuc_offset       = (const float *)cal->raw_buf[set][6];
 		cal->nuc_px           = (const float *)cal->raw_buf[set][5];
 		cal->nuc_px2          = (const float *)cal->raw_buf[set][7];
@@ -540,6 +541,21 @@ thermapp_cal_select(struct thermapp_cal *cal, enum thermapp_video_mode video_mod
 		cal->histogram_peak_target = cal->header[set].histogram_peak_target;
 		cal->delta_thermistor      = cal->header[set].delta_thermistor;
 		cal->dist_param            = cal->header[set].dist_param;
+
+		// The app sends the entire header, except word 0x0d
+		// which is either left as-is or set to 2500 as done here.
+		if (cal->ver_format == 2) {
+			uint16_t word_0x0d = 2500;
+			thermapp_usb_cfg_write(dev, &word_0x0d, sizeof (uint16_t) * 0x0d, sizeof (uint16_t));
+		}
+		// Skip sending the entire header:
+		// Assume the preamble words (0x00-0x03) must not change for the device to recognize the header.
+		// Assume the control words (0x04, 0x0b-0x0c) shouldn't change as part of changing calibration sets.
+		// Assume the status words (0x05-0x0a, 0x0e-0x0f, 0x19-0x1b) are ignored by the device.
+		// Update the remainder (0x10-0x18, 0x1c-0x1f) only.  Note that word 0x12 is dynamically updated elsewhere.
+		// Don't actually send the header yet, let the caller do it after word 0x12 has been updated.
+		thermapp_usb_cfg_write(dev, &cal->header[set].cfg.word[0x10], sizeof (uint16_t) * 0x10, sizeof (uint16_t) * 0x09);
+		thermapp_usb_cfg_write(dev, &cal->header[set].cfg.word[0x1c], sizeof (uint16_t) * 0x1c, sizeof (uint16_t) * 0x04);
 	} else {
 		cal->nuc_offset       = cal->auto_offset;
 		cal->nuc_px           = NULL;
@@ -561,6 +577,13 @@ thermapp_cal_select(struct thermapp_cal *cal, enum thermapp_video_mode video_mod
 		cal->histogram_peak_target = 0.0;
 		cal->delta_thermistor      = NULL;
 		cal->dist_param            = NULL;
+
+		// Revert the above header changes to the initial values used during autocal.
+		if (cal->ver_format == 2) {
+			thermapp_usb_cfg_write(dev, &thermapp_initial_cfg.word[0x0d], sizeof (uint16_t) * 0x0d, sizeof (uint16_t));
+		}
+		thermapp_usb_cfg_write(dev, &thermapp_initial_cfg.word[0x10], sizeof (uint16_t) * 0x10, sizeof (uint16_t) * 0x09);
+		thermapp_usb_cfg_write(dev, &thermapp_initial_cfg.word[0x1c], sizeof (uint16_t) * 0x1c, sizeof (uint16_t) * 0x04);
 	}
 	cal->cur_set = set;
 	return 1;

@@ -2,6 +2,7 @@
 This fork is designed to allow the Therm-App thermal imaging camera for use as a webcam-like device with minimal effort.
 
 ## New features
+* Can use either the camera's factory calibration data (`-c` option) or automatic calibration
 * Automatic non-uniformity calibration (keep lens cover on when starting software)
 * Automatic bad pixel detection and correction during the NUC process
 * Image range scaling
@@ -76,5 +77,4 @@ The official ThermApp Android app sends other information to the server as part 
 ## Todo
 * Smarter bad pixel detection
 * Automatically download the camera's factory calibration data
-* Use the camera's factory calibration data
 * Colour LUT support

@@ -10,6 +10,7 @@
 
 #include <inttypes.h>
 #include <math.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -179,6 +180,7 @@ main(int argc, char *argv[])
 	double old_deriv_temp_delta = 0.0;
 	struct timespec transient_start = { 0 };
 	struct timespec transient_step_start = { 0 };
+	uint16_t vgsk = thermapp_initial_cfg.VoutC;
 	uint8_t palette_index[UINT16_MAX+1];
 	uint8_t palette[UINT8_MAX+1];
 
@@ -352,6 +354,41 @@ main(int argc, char *argv[])
 			}
 			thermapp_cal_bpr_init(thermcal);
 		}
+
+		if (thermapp_cal_select(thermcal, thermdev, video_mode, temp_therm)
+		// XXX: Don't update vgsk/VoutC on every frame, else it will go bistable
+		// since we begin seeing the effects of the vgsk/VoutC write immediately.
+		// Instead wait the about-two-frame delay for the previous write to
+		// complete (i.e. until the incoming header matches the outgoing header).
+		//
+		// Example:  We receive frame 1, calculate a delta to apply to vgsk/VoutC
+		// from the pixel data (which steps toward the target vgsk/VoutC value),
+		// and send that new value.  The delta begins to take effect while frame 2
+		// is being captured; later scanlines have increasingly larger or smaller
+		// values to match the gain change.  However the header for frame 2 does
+		// not contain the updated vgsk/VoutC value, it still reports the original
+		// value.  Next we receive frame 2, calculate a new delta from the original
+		// vgsk/VoutC (smaller than what was calculated from frame 1 because of the
+		// gain taking effect, which is a retreat from the target value), and send
+		// it.  The process repeats, with frame 3 reporting the vgsk/VoutC computed
+		// from frame 1 but with its pixel values retreating because of frame 2,
+		// resulting in a larger step than desired toward the target value.
+		 || vgsk == frame.header.VoutC) {
+			// If for some reason switching to the autocal set, don't adjust
+			// vgsk/VoutC since that cal is only valid at a particular value.
+			if (thermcal->cur_set < CAL_SETS) {
+				vgsk = thermapp_img_vgsk(thermcal, &frame);
+				thermapp_usb_cfg_write(thermdev, &vgsk, offsetof(union thermapp_cfg, VoutC), sizeof vgsk);
+			} else {
+				vgsk = thermapp_initial_cfg.VoutC;
+			}
+		}
+
+		// XXX: Sometimes vgsk/VoutC in the response never updates to match the
+		// most recent request.  Unclear if that request is queued, or if it took
+		// effect and the response header was never updated.  May be timing related.
+		// Send the request on every received frame until it updates.
+		thermapp_usb_cfg_write(thermdev, NULL, 0, 0);
 
 		float uniform[FRAME_PIXELS_MAX], frame_min, frame_max;
 		uint16_t quantized[FRAME_PIXELS_MAX];

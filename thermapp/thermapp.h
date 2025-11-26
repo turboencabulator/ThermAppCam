@@ -198,7 +198,7 @@ void thermapp_usb_close(struct thermapp_usb_dev *);
 
 struct thermapp_cal *thermapp_cal_open(const char *, const union thermapp_cfg *);
 void thermapp_cal_bpr_init(struct thermapp_cal *);
-int thermapp_cal_select(struct thermapp_cal *, enum thermapp_video_mode, float);
+int thermapp_cal_select(struct thermapp_cal *, struct thermapp_usb_dev *, enum thermapp_video_mode, float);
 void thermapp_cal_close(struct thermapp_cal *);
 
 int thermapp_img_vgsk(const struct thermapp_cal *, const union thermapp_frame *);

@@ -450,8 +450,18 @@ thermapp_cal_bpr_init(struct thermapp_cal *cal)
 	cal->bpr_i = first_good_index(cal);
 }
 
+#define CAL_VALID_0     0xfff // {0..11}.bin
 #define CAL_VALID_NV    0xffc // {2..11}.bin
 #define CAL_VALID_TH 0x7c08fc // {{2..7},11,{18..22}}{a,b,c}.bin
+
+int
+thermapp_cal_present(const struct thermapp_cal *cal)
+{
+	// True if the minimal set of calibration files are available.
+	// Autocal is unnecessary when both the factory bad pixel map is present
+	// and thermapp_cal_select will always select one of the factory calibration sets.
+	return (cal->valid[0] & CAL_VALID_0) == CAL_VALID_0;
+}
 
 static enum thermapp_cal_set
 select_nv(const struct thermapp_cal *cal)

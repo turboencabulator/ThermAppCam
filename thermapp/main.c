@@ -243,9 +243,13 @@ main(int argc, char *argv[])
 			old_temp_delta = NAN;
 			old_deriv_temp_delta = NAN;
 
-			// Restart autocal.
-			autocal_frame = 50;
-			printf("Calibrating... cover the lens!\n");
+			// Use factory cal and/or restart autocal.
+			if (thermapp_cal_present(thermcal)) {
+				thermapp_cal_bpr_init(thermcal);
+			} else {
+				autocal_frame = 50;
+				printf("Calibrating... cover the lens!\n");
+			}
 
 			// Discard 1st frame, it usually has the header repeated twice
 			// and the data shifted into the pad by a corresponding amount.

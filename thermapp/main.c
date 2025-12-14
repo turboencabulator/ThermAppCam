@@ -21,6 +21,34 @@
 #define VIDEO_DEVICE "/dev/video0"
 #define FRAME_FORMAT V4L2_PIX_FMT_YUV420
 
+static int
+v4l2_open(const char *videodev)
+{
+	int fd = open(videodev, O_WRONLY);
+	if (fd < 0) {
+		perror("open");
+		return -1;
+	}
+
+	struct v4l2_capability cap;
+	if (ioctl(fd, VIDIOC_QUERYCAP, &cap) < 0) {
+		perror("VIDIOC_QUERYCAP");
+		return -1;
+	}
+
+	if (!(cap.capabilities & V4L2_CAP_VIDEO_OUTPUT)) {
+		fprintf(stderr, "%s is not a video output device\n", videodev);
+		return -1;
+	}
+
+	if (!(cap.capabilities & V4L2_CAP_READWRITE)) {
+		fprintf(stderr, "%s does not support write i/o\n", videodev);
+		return -1;
+	}
+
+	return fd;
+}
+
 static size_t
 v4l2_format_select(int fdwr,
                    uint32_t format,
@@ -157,9 +185,8 @@ main(int argc, char *argv[])
 		}
 	}
 
-	fdwr = open(videodev, O_WRONLY);
+	fdwr = v4l2_open(videodev);
 	if (fdwr < 0) {
-		perror("open");
 		ret = EXIT_FAILURE;
 		goto done;
 	}

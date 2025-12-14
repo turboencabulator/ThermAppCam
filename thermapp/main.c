@@ -215,6 +215,15 @@ main(int argc, char *argv[])
 		if (ident_frame) {
 			ident_frame -= 1;
 
+			// Suspend, ideally until there is demand for the video.
+			// The camera holds the last 512-byte packet of the current frame until
+			// the following resume.  Note that this matches the start-up behavior
+			// where the first frame is preceded with 512 bytes of 0xff i.e. the
+			// last packet of the (nonexistent) frame before the first one.
+			uint16_t mode = 1;
+			thermapp_usb_cfg_write(thermdev, &mode, offsetof(union thermapp_cfg, modes), sizeof mode);
+			thermapp_usb_cfg_write(thermdev, NULL, 0, 0);
+
 			thermcal = thermapp_cal_open(caldir, &frame.header);
 			if (!thermcal) {
 				ret = EXIT_FAILURE;
@@ -258,6 +267,9 @@ main(int argc, char *argv[])
 				autocal_frame = 50;
 				printf("Calibrating... cover the lens!\n");
 			}
+
+			// TODO: Cannot detect video demand.  Resume after reading calibration.
+			resume_req = 3;
 
 			// Discard 1st frame, it usually has the header repeated twice
 			// and the data shifted into the pad by a corresponding amount.

@@ -170,6 +170,7 @@ main(int argc, char *argv[])
 		goto done;
 	}
 
+	int resume_req = 2;
 	int ident_frame = 1;
 	int autocal_frame = 0;
 	int temp_settle_frame = 0;
@@ -201,6 +202,13 @@ main(int argc, char *argv[])
 
 		union thermapp_frame frame;
 		if (!thermapp_usb_frame_read(thermdev, &frame, sizeof frame)) {
+			if (resume_req) {
+				resume_req -= 1;
+
+				uint16_t mode = 2;
+				thermapp_usb_cfg_write(thermdev, &mode, offsetof(union thermapp_cfg, modes), sizeof mode);
+				thermapp_usb_cfg_write(thermdev, NULL, 0, 0);
+			}
 			continue;
 		}
 
@@ -392,6 +400,7 @@ main(int argc, char *argv[])
 		// most recent request.  Unclear if that request is queued, or if it took
 		// effect and the response header was never updated.  May be timing related.
 		// Send the request on every received frame until it updates.
+		// See also resume_req, may need a 2nd/3rd write to resume after suspend.
 		thermapp_usb_cfg_write(thermdev, NULL, 0, 0);
 
 		float uniform[FRAME_PIXELS_MAX], frame_min, frame_max;

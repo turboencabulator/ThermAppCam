@@ -258,8 +258,8 @@ main(int argc, char *argv[])
 			}
 
 			printf("Serial number: %" PRIu32 "\n", thermcal->serial_num);
-			printf("Hardware number: %" PRIu16 "\n", thermcal->hardware_num);
-			printf("Firmware number: %" PRIu16 "\n", thermcal->firmware_num);
+			printf("Hardware version: %" PRIu16 "\n", thermcal->hardware_ver);
+			printf("Firmware version: %" PRIu16 "\n", thermcal->firmware_ver);
 
 			img_sz = v4l2_format_select(fdwr, FRAME_FORMAT, thermcal->img_w, thermcal->img_h);
 			if (!img_sz) {

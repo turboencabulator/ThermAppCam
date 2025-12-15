@@ -303,10 +303,10 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 
 	cal->serial_num   = header->serial_num_lo
 	                  | header->serial_num_hi << 16;
-	cal->hardware_num = header->hardware_num;
-	cal->firmware_num = header->firmware_num;
-	if (cal->firmware_num == 256) {
-		cal->firmware_num = 7; // ???
+	cal->hardware_ver = header->hardware_ver;
+	cal->firmware_ver = header->firmware_ver;
+	if (cal->firmware_ver == 256) {
+		cal->firmware_ver = 7; // ???
 	}
 
 	cal->nuc_w = cal->img_w = header->data_w;

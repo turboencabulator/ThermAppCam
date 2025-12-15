@@ -25,12 +25,22 @@ if __name__ == '__main__':
 		be necessary.  All are sent as strings.''')
 	# Get these first three from your camera.  To find the values,
 	# watch the output of ThermAppCam when it starts.
-	pgroup.add_argument('--serialNumber', required=True)
-	pgroup.add_argument('--fWVersion')
-	pgroup.add_argument('--hWVersion')
-	# Don't know what the calibration type is, and it's not clear what
-	# should be in appVersion when we're not using the official app.
-	pgroup.add_argument('--calibType')  # Observed as '0'
+	pgroup.add_argument('--serialNumber', required=True, help='''
+		words 5 and 6 from the frame header''')
+	pgroup.add_argument('--hWVersion', help='''
+		word 7 from the frame header''')
+	pgroup.add_argument('--fWVersion', help='''
+		word 8 from the frame header, if 256 then set this to 7''')
+	# The app populates the calibration type with the version format
+	# field (word 0) of 0.bin.  Note that 0.bin also contains a
+	# calibration type field (as word 2).  Also note the circular
+	# dependency of needing calibration files to populate a request
+	# for calibration files.  The app populates with '0' when unknown.
+	pgroup.add_argument('--calibType', help='''
+		word 0 (version format) from 0.bin''')  # Observed as '0'
+	# The app sends 'N/A' for appVersion and phoneIMEI when unknown.
+	# It's not clear how appVersion should be used if we're not using
+	# the official app.
 	pgroup.add_argument('--appVersion')  # Observed as '2.6.25'
 	# Everything below shouldn't have any effect on calibration data.
 	# Probably just extra data collection for stats or debugging.

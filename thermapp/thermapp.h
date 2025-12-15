@@ -49,8 +49,8 @@ union thermapp_cfg {
 		uint16_t modes;// 0xXXXM  Modes set last nibble
 		uint16_t serial_num_lo;
 		uint16_t serial_num_hi;
-		uint16_t hardware_num;
-		uint16_t firmware_num;
+		uint16_t hardware_ver;
+		uint16_t firmware_ver;
 		uint16_t fpa_h;
 		uint16_t fpa_w;
 		uint16_t data_h;
@@ -99,8 +99,8 @@ struct thermapp_usb_dev {
 
 struct thermapp_cal {
 	uint32_t serial_num;
-	uint16_t hardware_num;
-	uint16_t firmware_num;
+	uint16_t hardware_ver;
+	uint16_t firmware_ver;
 
 	size_t img_w;
 	size_t img_h;

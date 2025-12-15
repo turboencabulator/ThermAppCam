@@ -36,12 +36,14 @@ sudo thermapp [options]
 
 The software will read 50 frames for its automatic calibration.  After that is complete, you may remove the lens cap and open the video device in your player of choice.
 
+If using the factory calibration (see below), there is no need to cover the lens at startup, nor to wait 50 frames.  However the video may flicker (several times initially, then only occasionally) as part of the camera's gain adjustment.
+
 To quit, either press Ctrl+C or unplug the camera.
 
 ## Calibration
 Your camera's factory calibration data is stored on ThermApp servers, not on the camera itself.  If you have used the official ThermApp Android app with your camera, it will connect and download that data on the first time you use it.  You can find these calibration files in your Android device's `ThermApp` directory.  Look for a subdirectory with the same name as your camera's serial number, which should contain files such as `0.bin`, `1.bin`, etc.  Be sure to keep backups of these files in case the server ever becomes unavailable!
 
-This software may be able to use that factory calibration data in place of its automatic calibration.
+This software can use that factory calibration data in place of its automatic calibration.  Use the `-c` option to tell this software where to find the calibration files.
 
 To download the calibration files without using the official app, use the `get-calibration.py` script, found in the `calibration` directory.  You will need your camera's serial number and possibly the hardware and firmware versions; you can find these by viewing the first few lines of output from the `sudo thermapp` command above.  Then substitute `${SERIALNUMBER}` with your serial number in the command below, and run:
 ```

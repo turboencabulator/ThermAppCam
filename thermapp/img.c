@@ -229,7 +229,7 @@ thermapp_img_bpr(const struct thermapp_cal *cal, float *io)
 }
 
 void
-thermapp_img_minmax(const struct thermapp_cal *cal, const float *in_px, float *out_px_min, float *out_px_max, size_t *out_i_min, size_t *out_i_max)
+thermapp_img_minmax(const struct thermapp_cal *cal, const float *in_px, float *out_px_min, float *out_px_max, size_t *out_i_min, size_t *out_i_max, double *out_t_min, double *out_t_max, double t_refl, double emissivity)
 {
 	float px_min, px_max;
 	size_t i_min, i_max;
@@ -247,10 +247,27 @@ thermapp_img_minmax(const struct thermapp_cal *cal, const float *in_px, float *o
 			i_max = i;
 		}
 	}
+
+	// Assume measured energy is the sum of emitted and reflected energy:
+	//   x^4 = E*t^4 + R*r^4
+	// where:
+	//   x: NUC-corrected sensor data, K (measured, with units = 0.01 C)
+	//   t: object temperature, K
+	//   r: reflected temperature, K (chosen, default: 20 C = 293.15 K)
+	//   E: emissivity (chosen, default: 0.95)
+	//   R: reflectivity(?), 1-E
+	// Solving for t:
+	//   t = ((x^4 - R*r^4)/E)^0.25
+	double refl = (1.0 - emissivity) * pow(t_refl + 273.15, 4.0);
+	double t_min = pow((pow(px_min / 100.0 + 273.15, 4.0) - refl) / emissivity, 0.25) - 273.15;
+	double t_max = pow((pow(px_max / 100.0 + 273.15, 4.0) - refl) / emissivity, 0.25) - 273.15;
+
 	if (out_px_min) *out_px_min = px_min;
 	if (out_px_max) *out_px_max = px_max;
 	if (out_i_min) *out_i_min = i_min;
 	if (out_i_max) *out_i_max = i_max;
+	if (out_t_min) *out_t_min = t_min;
+	if (out_t_max) *out_t_max = t_max;
 }
 
 void

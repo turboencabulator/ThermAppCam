@@ -205,7 +205,7 @@ void thermapp_cal_close(struct thermapp_cal *);
 int thermapp_img_vgsk(const struct thermapp_cal *, const union thermapp_frame *);
 void thermapp_img_nuc(const struct thermapp_cal *, const union thermapp_frame *, float *, int, float);
 void thermapp_img_bpr(const struct thermapp_cal *, float *);
-void thermapp_img_minmax(const struct thermapp_cal *, const float *, float *, float *, size_t *, size_t *);
+void thermapp_img_minmax(const struct thermapp_cal *, const float *, float *, float *, size_t *, size_t *, double *, double *, double, double);
 void thermapp_img_quantize(const struct thermapp_cal *, const float *, uint16_t *);
 void thermapp_img_hpf(const struct thermapp_cal *, uint16_t *, float);
 void thermapp_img_lut(const struct thermapp_cal *, const uint16_t *, uint8_t *, float, float);

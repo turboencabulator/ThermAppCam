@@ -229,17 +229,28 @@ thermapp_img_bpr(const struct thermapp_cal *cal, float *io)
 }
 
 void
-thermapp_img_minmax(const struct thermapp_cal *cal, const float *in, float *min, float *max)
+thermapp_img_minmax(const struct thermapp_cal *cal, const float *in_px, float *out_px_min, float *out_px_max, size_t *out_i_min, size_t *out_i_max)
 {
-	float frame_min = INFINITY;
-	float frame_max = -INFINITY;
-	for (size_t i = cal->img_w * cal->img_h; i; --i) {
-		float px = *in++;
-		frame_min = fminf(frame_min, px);
-		frame_max = fmaxf(frame_max, px);
+	float px_min, px_max;
+	size_t i_min, i_max;
+
+	px_min = px_max = *in_px++;
+	i_min = i_max = 0;
+	for (size_t i = 1; i < cal->img_w * cal->img_h; ++i) {
+		float px = *in_px++;
+		if (px_min > px) {
+			px_min = px;
+			i_min = i;
+		}
+		if (px_max < px) {
+			px_max = px;
+			i_max = i;
+		}
 	}
-	*min = frame_min;
-	*max = frame_max;
+	if (out_px_min) *out_px_min = px_min;
+	if (out_px_max) *out_px_max = px_max;
+	if (out_i_min) *out_i_min = i_min;
+	if (out_i_max) *out_i_max = i_max;
 }
 
 void

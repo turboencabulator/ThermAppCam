@@ -442,20 +442,33 @@ main(int argc, char *argv[])
 		// See also resume_req, may need a 2nd/3rd write to resume after suspend.
 		thermapp_usb_cfg_write(thermdev, NULL, 0, 0);
 
-		float uniform[FRAME_PIXELS_MAX], frame_min, frame_max;
+		float uniform[FRAME_PIXELS_MAX], uniform_min, uniform_max;
 		uint16_t quantized[FRAME_PIXELS_MAX];
+		size_t i_min, i_max;
+		div_t xy_min, xy_max;
 		thermapp_img_nuc(thermcal, &frame, uniform, !!transient_steps, temp_delta);
 		thermapp_img_bpr(thermcal, uniform);
-		thermapp_img_minmax(thermcal, uniform, &frame_min, &frame_max);
+		thermapp_img_minmax(thermcal, uniform, &uniform_min, &uniform_max, &i_min, &i_max);
 		thermapp_img_quantize(thermcal, uniform, quantized);
 		if (video_mode == VIDEO_MODE_ENHANCED) {
 			thermapp_img_hpf(thermcal, quantized, enhanced_ratio);
 		}
 		thermapp_img_lut(thermcal, quantized, palette_index, 0.0f, 0.0f);
 
+		xy_min = div(i_min, thermcal->img_w);
+		xy_max = div(i_max, thermcal->img_w);
+		if (fliph) {
+			xy_min.rem = thermcal->img_w - 1 - xy_min.rem;
+			xy_max.rem = thermcal->img_w - 1 - xy_max.rem;
+		}
+		if (flipv) {
+			xy_min.quot = thermcal->img_h - 1 - xy_min.quot;
+			xy_max.quot = thermcal->img_h - 1 - xy_max.quot;
+		}
+
 		uint32_t frame_num = frame.header.frame_num_lo
 		                   | frame.header.frame_num_hi << 16;
-		printf("\rFrame #%" PRIu32 ":  FPA: %f C  Thermistor: %f C  Range: [%f:%f]", frame_num, cur_temp_fpa, cur_temp_therm, frame_min, frame_max);
+		printf("\rFrame #%" PRIu32 ":  FPA: %f C  Thermistor: %f C  Range: [%f:%f] @ (%d,%d):(%d,%d)", frame_num, cur_temp_fpa, cur_temp_therm, uniform_min, uniform_max, xy_min.rem, xy_min.quot, xy_max.rem, xy_max.quot);
 		fflush(stdout);
 
 		const uint16_t *in = quantized;

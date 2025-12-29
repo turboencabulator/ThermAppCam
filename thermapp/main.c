@@ -147,10 +147,10 @@ main(int argc, char *argv[])
 	while ((opt = getopt(argc, argv, "HVc:d:e::h")) != -1) {
 		switch (opt) {
 		case 'H':
-			fliph = 0;
+			fliph = !fliph;
 			break;
 		case 'V':
-			flipv = 1;
+			flipv = !flipv;
 			break;
 		case 'c':
 			caldir = optarg;

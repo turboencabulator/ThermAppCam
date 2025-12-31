@@ -6,7 +6,7 @@ This fork is designed to allow the Therm-App thermal imaging camera for use as a
 * Automatic non-uniformity calibration (keep lens cover on when starting software)
 * Automatic bad pixel detection and correction during the NUC process
 * Image range scaling
-* YUV (V4L2_PIX_FMT_YUV420) instead of Grey (V4L2_PIX_FMT_GREY) output for better compatibility with security software (eg. motion or mjpgstreamer)
+* Palette selection
 * Image is the right way round by default (instead of horizontally flipped)
 * Image can be flipped horizontally or vertically (`-H` or `-V` options)
 
@@ -69,6 +69,8 @@ The official ThermApp Android app sends other information to the server as part 
 <dd>Enhanced mode, also known as "night vision" mode.  Video frames are high-pass filtered.  The optional ratio is a parameter to this filter, and should be between 0.25 and 5.0 inclusive.  The default ratio is 1.25.  Low values produce a characteristic cold halo around warm objects.  High values produce an effect similar to edge detection.</dd>
 <dt><code>-h</code></dt>
 <dd>Show the help message and exit.</dd>
+<dt><code>-p palette</code></dt>
+<dd>Select one of the available palettes: <code>whitehot</code> (default), <code>blackhot</code>, <code>green</code>, <code>iron</code>, <code>vivid</code>, <code>lava</code>, <code>rainbow</code>, <code>psy</code>.</dd>
 </dl>
 
 ## Troubleshooting
@@ -79,4 +81,3 @@ The official ThermApp Android app sends other information to the server as part 
 ## Todo
 * Smarter bad pixel detection
 * Automatically download the camera's factory calibration data
-* Colour LUT support

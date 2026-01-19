@@ -233,6 +233,33 @@ choose_palette(const char *name, uint32_t *buf)
 		};
 		return green;
 
+	} else if (strcmp(name, "ironbow") == 0) {
+		// https://stackoverflow.com/questions/28495390/thermal-imaging-palette
+		static const double coeffs[3][6] = {
+			{-39.1125,  2.19321,  -0.00532377, 4.18485e-6,  0.0,        0.0,        },
+			{ -1.61706, 0.280643, -0.00808127, 6.73208e-5, -1.64251e-7, 1.28826e-10,},
+			{ 30.466,   3.24907,  -0.0232532,  4.19544e-5, -1.05015e-8, 9.48804e-12,},
+		};
+		for (size_t i = 0; i < UINT8_MAX+1; ++i) {
+			size_t j = 5;
+			double x = (double)(433 * i) / (double)(UINT8_MAX+1);
+			double r = coeffs[0][j];
+			double g = coeffs[1][j];
+			double b = coeffs[2][j];
+			while (j-- > 0) {
+				r = fma(r, x, coeffs[0][j]);
+				g = fma(g, x, coeffs[1][j]);
+				b = fma(b, x, coeffs[2][j]);
+			}
+			r = (r < 0.0) ? 0.0 : (r >= 255.0) ? 255.0 : floor(r);
+			g = (g < 0.0) ? 0.0 : (g >= 255.0) ? 255.0 : floor(g);
+			b = (b < 0.0) ? 0.0 : (b >= 255.0) ? 255.0 : floor(b);
+			buf[i] = (int)r << SHIFT_R
+			       | (int)g << SHIFT_G
+			       | (int)b << SHIFT_B;
+		}
+		return buf;
+
 	} else {
 		return NULL;
 	}
@@ -402,7 +429,7 @@ main(int argc, char *argv[])
 			printf("                Enhanced ratio: 0.25 to 5.0 [default: 1.25]\n");
 			printf("  -h            Show this help message and exit\n");
 			printf("  -p palette    Select the palette: whitehot [default], blackhot, green,\n");
-			printf("                iron, vivid, lava, rainbow, psy\n");
+			printf("                iron, ironbow, vivid, lava, rainbow, psy\n");
 			goto done;
 		case 'p':
 			palette_name = optarg;

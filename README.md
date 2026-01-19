@@ -70,7 +70,7 @@ The official ThermApp Android app sends other information to the server as part 
 <dt><code>-h</code></dt>
 <dd>Show the help message and exit.</dd>
 <dt><code>-p palette</code></dt>
-<dd>Select one of the available palettes: <code>whitehot</code> (default), <code>blackhot</code>, <code>green</code>, <code>iron</code>, <code>vivid</code>, <code>lava</code>, <code>rainbow</code>, <code>psy</code>.</dd>
+<dd>Select one of the available palettes: <code>whitehot</code> (default), <code>blackhot</code>, <code>green</code>, <code>iron</code>, <code>ironbow</code>, <code>vivid</code>, <code>lava</code>, <code>rainbow</code>, <code>psy</code>.</dd>
 </dl>
 
 ## Troubleshooting

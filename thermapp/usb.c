@@ -258,14 +258,28 @@ thermapp_usb_open(void)
 		goto err;
 	}
 
-	ret = libusb_set_configuration(dev->usb, 1);
+	// Cannot change configuration if a kernel driver has claimed an interface.
+	// But maybe we don't need to, if it's already in the right configuration.
+	int cfg = -1;
+	ret = libusb_get_configuration(dev->usb, &cfg);
+	if (ret) {
+		fprintf(stderr, "%s: %s\n", "libusb_get_configuration", libusb_strerror(ret));
+		goto err;
+	}
+	if (cfg != 1) {
+		cfg = 1;
+		ret = libusb_set_configuration(dev->usb, cfg);
+	}
 	if (ret) {
 		fprintf(stderr, "%s: %s\n", "libusb_set_configuration", libusb_strerror(ret));
 		goto err;
 	}
 
-	//if (libusb_kernel_driver_active(dev->usb, 0))
-	//	libusb_detach_kernel_driver(dev->usb, 0);
+	ret = libusb_set_auto_detach_kernel_driver(dev->usb, 1);
+	if (ret && ret != LIBUSB_ERROR_NOT_SUPPORTED) {
+		fprintf(stderr, "%s: %s\n", "libusb_set_auto_detach_kernel_driver", libusb_strerror(ret));
+		goto err;
+	}
 
 	ret = libusb_claim_interface(dev->usb, 0);
 	if (ret) {

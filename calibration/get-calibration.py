@@ -134,7 +134,8 @@ if __name__ == '__main__':
 	#   'type':  A string.  Always observed as 'bin'.
 	#
 	# The createdDate timestamp appears to be a Unix timestamp, suffixed
-	# with milliseconds, then suffixed again with the UTC offset (+0300).
+	# with milliseconds, then suffixed again with the UTC offset (+0300)
+	# to capture the location info.  This is a Microsoft .NET format.
 	re_date = re.compile('/Date\\(([0-9]+)([+-][0-9]+)?\\)/')
 
 	# The app requests FilesList.json first.  Perhaps it uses it to filter
@@ -162,7 +163,6 @@ if __name__ == '__main__':
 			ns = int(timestamp[1]) * 1000000
 			if timestamp.lastindex == 2:
 				utc_offset = time.strptime(timestamp[2], '%z').tm_gmtoff
-				ns -= utc_offset * 1000000000
 			os.utime(elem['name'], ns=(ns, ns))
 	headers['Accept'] = 'application/json'
 

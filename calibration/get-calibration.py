@@ -6,15 +6,36 @@
 # because direct access via FTP/HTTP would make too much sense.
 # More details at http://api.therm-app.com/MobileService.svc/help
 
-if __name__ == '__main__':
-	import argparse
-	import os
-	import http.client
-	import json
-	import re
-	import shutil
-	import time
+import argparse
+import os
+import http.client
+import json
+import re
+import shutil
+import time
 
+def json_request(conn, endpoint, body, headers):
+	# The app uses lowercase 'mobileservice.svc'.
+	conn.request('POST', '/MobileService.svc/' + endpoint, body=json.dumps(body), headers=headers)
+	resp = conn.getresponse()
+	if resp.status != http.client.OK:
+		raise ConnectionError('{0.status} {0.reason}'.format(resp))
+
+	content_type = resp.getheader('Content-Type')
+	if not content_type.startswith(headers['Accept']):
+		raise RuntimeWarning('Content-Type: {0}'.format(content_type))
+
+	if content_type.startswith('application/json'):
+		# JSON responses are expected to contain 'data', 'errorMessage',
+		# 'hasError', 'ruleActions', and 'sessionID'.
+		resp = json.load(resp)
+		# Even HTTP 200 responses can contain embedded errors.
+		if resp.get('hasError', False):
+			raise ConnectionError(resp.get('errorMessage', ''))
+
+	return resp
+
+if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='''
 		Downloads the calibration files for your camera.  All files
 		will be stored in a subdirectory of the current directory,
@@ -88,20 +109,9 @@ if __name__ == '__main__':
 	# responses.  The sessionID appears to be a datetime string in the
 	# server's localtime (+0300), down to the millisecond, and without any
 	# punctuation nor leading zeros on each date and time element.
-	# 
-	# Other fields in each JSON response are 'data', 'errorMessage',
-	# 'hasError', and 'ruleActions'.  Only 'data' appears to be useful,
-	# and only for the GetFilesList/GetFile requests below.
 	print('SessionStart')
-	conn.request('POST', '/mobileservice.svc/SessionStart', body=json.dumps(body), headers=headers)
-	resp = conn.getresponse()
-	if resp.status != http.client.OK:
-		raise ConnectionError('{0.status} {0.reason}'.format(resp))
-	content_type = resp.getheader('Content-Type')
-	if not content_type.startswith(headers['Accept']):
-		raise RuntimeWarning('Content-Type: {0}'.format(content_type))
-	data = json.load(resp)
-	body['sessionID'] = data['sessionID']
+	resp = json_request(conn, 'SessionStart', body=body, headers=headers)
+	body['sessionID'] = resp['sessionID']
 
 	# GetFilesList returns a directory listing.
 	# Request the serialNumber directory.
@@ -109,15 +119,8 @@ if __name__ == '__main__':
 	# for validity but it doesn't need to match the requested directory.
 	body['data'] = { 'folder': body['serialNumber'] }
 	print('GetFilesList', body['serialNumber'])
-	conn.request('POST', '/mobileservice.svc/GetFilesList', body=json.dumps(body), headers=headers)
-	resp = conn.getresponse()
-	if resp.status != http.client.OK:
-		raise ConnectionError('{0.status} {0.reason}'.format(resp))
-	content_type = resp.getheader('Content-Type')
-	if not content_type.startswith(headers['Accept']):
-		raise RuntimeWarning('Content-Type: {0}'.format(content_type))
-	data = json.load(resp)
-	files = data['data']
+	resp = json_request(conn, 'GetFilesList', body=body, headers=headers)
+	files = resp['data']
 
 	# Each element in the files array contains:
 	#   'id':  An integer, appears to be sequential.
@@ -146,13 +149,7 @@ if __name__ == '__main__':
 		# GetFile uses the 'token' UUID to request a file.
 		body['data'] = { 'token': elem['token'] }
 		print('GetFile', elem['name'])
-		conn.request('POST', '/mobileservice.svc/GetFile', body=json.dumps(body), headers=headers)
-		resp = conn.getresponse()
-		if resp.status != http.client.OK:
-			raise ConnectionError('{0.status} {0.reason}'.format(resp))
-		content_type = resp.getheader('Content-Type')
-		if not content_type.startswith(headers['Accept']):
-			raise RuntimeWarning('Content-Type: {0}'.format(content_type))
+		resp = json_request(conn, 'GetFile', body=body, headers=headers)
 
 		# Save the data to a file.
 		f = open(elem['name'], 'wb')
@@ -172,13 +169,5 @@ if __name__ == '__main__':
 	# End the session.
 	body['data'] = None
 	print('SessionEnd')
-	conn.request('POST', '/mobileservice.svc/SessionEnd', body=json.dumps(body), headers=headers)
-	resp = conn.getresponse()
-	if resp.status != http.client.OK:
-		raise ConnectionError('{0.status} {0.reason}'.format(resp))
-	content_type = resp.getheader('Content-Type')
-	if not content_type.startswith(headers['Accept']):
-		raise RuntimeWarning('Content-Type: {0}'.format(content_type))
-	data = json.load(resp)
-
+	resp = json_request(conn, 'SessionEnd', body=body, headers=headers)
 	conn.close()

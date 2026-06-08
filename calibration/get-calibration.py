@@ -167,7 +167,7 @@ if __name__ == '__main__':
 	headers['Accept'] = 'application/json'
 
 	# End the session.
-	body['data'] = None
+	del body['data']
 	print('SessionEnd')
 	resp = json_request(conn, 'SessionEnd', body=body, headers=headers)
 	conn.close()

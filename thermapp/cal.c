@@ -553,10 +553,12 @@ thermapp_cal_select(struct thermapp_cal *cal, struct thermapp_usb_dev *dev, enum
 		cal->dist_param            = cal->header[set].dist_param;
 
 		// The app sends the entire header, except word 0x0d
-		// which is either left as-is or set to 2500 as done here.
+		// which is sometimes left as-is or set to 2500 as done here.
 		if (cal->ver_format == 2) {
 			uint16_t word_0x0d = 2500;
 			thermapp_usb_cfg_write(dev, &word_0x0d, sizeof (uint16_t) * 0x0d, sizeof (uint16_t));
+		} else if (cal->ver_format == 0) {
+			thermapp_usb_cfg_write(dev, &cal->header[set].cfg.word[0x0d], sizeof (uint16_t) * 0x0d, sizeof (uint16_t));
 		}
 		// Skip sending the entire header:
 		// Assume the preamble words (0x00-0x03) must not change for the device to recognize the header.

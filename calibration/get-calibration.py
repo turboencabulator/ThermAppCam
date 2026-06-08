@@ -4,6 +4,7 @@
 
 # Script to download the calibration files for your camera,
 # because direct access via FTP/HTTP would make too much sense.
+# More details at http://api.therm-app.com/MobileService.svc/help
 
 if __name__ == '__main__':
 	import argparse
@@ -104,6 +105,8 @@ if __name__ == '__main__':
 
 	# GetFilesList returns a directory listing.
 	# Request the serialNumber directory.
+	# body['serialNumber'] is also required by the server; it is checked
+	# for validity but it doesn't need to match the requested directory.
 	body['data'] = { 'folder': body['serialNumber'] }
 	print('GetFilesList', body['serialNumber'])
 	conn.request('POST', '/mobileservice.svc/GetFilesList', body=json.dumps(body), headers=headers)

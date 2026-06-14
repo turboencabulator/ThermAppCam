@@ -121,6 +121,9 @@ if __name__ == '__main__':
 	print('GetFilesList', body['serialNumber'])
 	resp = json_request(conn, 'GetFilesList', body=body, headers=headers)
 	files = resp['data']
+	# Save the listing for posterity; it contains more info than FilesList.json.
+	with open('GetFilesList.json', 'w') as f:
+		json.dump(files, f, indent="\t")
 
 	# Each element in the files array contains:
 	#   'id':  An integer, appears to be sequential.
@@ -152,10 +155,9 @@ if __name__ == '__main__':
 		print('GetFile', elem['name'])
 		resp = json_request(conn, 'GetFile', body=body, headers=headers)
 
-		# Save the data to a file.
-		f = open(elem['name'], 'wb')
-		shutil.copyfileobj(resp, f)
-		f.close()
+		# Save the response to a file.
+		with open(elem['name'], 'wb') as f:
+			shutil.copyfileobj(resp, f)
 
 		# Set its timestamp.
 		timestamp = re_date.fullmatch(elem['createdDate'])

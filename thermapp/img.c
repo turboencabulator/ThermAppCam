@@ -35,11 +35,13 @@ center_of_mass(const unsigned *buf, size_t len)
 	return (wsum / sum) - 1.0;
 }
 
-int
-thermapp_img_vgsk(const struct thermapp_cal *cal, const union thermapp_frame *frame)
+void
+thermapp_img_vgsk(const struct thermapp_cal *cal, const union thermapp_frame *frame, uint16_t *vgsk)
 {
 	const uint16_t *pixels = (const uint16_t *)&frame->bytes[frame->header.data_offset];
-	int vgsk = frame->header.VoutC;
+
+	// These three are expected to be zero in the TH cal sets (11{a,b,c}.bin) and for autocal.
+	// Therefore vgsk/VoutC is only auto-adjusted when using the NV cal set.
 	int min = cal->vgsk_min;
 	int max = cal->vgsk_max;
 	double target = cal->histogram_peak_target;
@@ -56,12 +58,11 @@ thermapp_img_vgsk(const struct thermapp_cal *cal, const union thermapp_frame *fr
 		histogram(bins, pixels, frame->header.data_w * frame->header.data_h, frame->header.fpa_w == 640);
 		double cm = center_of_mass(bins, 256);
 		int delta = (int)(((target * 256.0) - cm) / 7.0);
-		int new = vgsk + delta;
+		int new = *vgsk + delta;
 		if (min < new && new < max) {
-			vgsk = new;
+			*vgsk = new;
 		}
 	}
-	return vgsk;
 }
 
 void

@@ -652,7 +652,6 @@ main(int argc, char *argv[])
 			thermapp_cal_bpr_init(thermcal);
 		}
 
-		if (thermapp_cal_select(thermcal, thermdev, video_mode, temp_therm)
 		// XXX: Don't update vgsk/VoutC on every frame, else it will go bistable
 		// since we begin seeing the effects of the vgsk/VoutC write immediately.
 		// Instead wait the about-two-frame delay for the previous write to
@@ -670,15 +669,10 @@ main(int argc, char *argv[])
 		// it.  The process repeats, with frame 3 reporting the vgsk/VoutC computed
 		// from frame 1 but with its pixel values retreating because of frame 2,
 		// resulting in a larger step than desired toward the target value.
-		 || vgsk == frame.header.VoutC) {
-			// If for some reason switching to the autocal set, don't adjust
-			// vgsk/VoutC since that cal is only valid at a particular value.
-			if (thermcal->cur_set < CAL_SETS) {
-				vgsk = thermapp_img_vgsk(thermcal, &frame);
-				thermapp_usb_cfg_write(thermdev, &vgsk, offsetof(union thermapp_cfg, VoutC), sizeof vgsk);
-			} else {
-				vgsk = thermapp_initial_cfg.VoutC;
-			}
+		if (!thermapp_cal_select(thermcal, thermdev, video_mode, temp_therm, &vgsk)
+		 && vgsk == frame.header.VoutC) {
+			thermapp_img_vgsk(thermcal, &frame, &vgsk);
+			thermapp_usb_cfg_write(thermdev, &vgsk, offsetof(union thermapp_cfg, VoutC), sizeof vgsk);
 		}
 
 		// XXX: Sometimes vgsk/VoutC in the response never updates to match the

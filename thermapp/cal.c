@@ -133,7 +133,9 @@ parse_header(struct thermapp_cal *cal, size_t set)
 			cal->header[set].vgsk_max = 2949;
 			cal->header[set].histogram_peak_target = 0.5;
 
-			// TODO: Populate delta_thermistor, dist_param?
+			// XXX: No defaults supplied for delta_thermistor, dist_param.
+			//      Implies no 11{a,b,c}.bin files (i.e. cal->cal_type != 2)
+			//      when cal->ver_format == 0.
 
 			return 1;
 		}
@@ -144,10 +146,12 @@ parse_header(struct thermapp_cal *cal, size_t set)
 				cal->header[set].cfg.word[i] = read_word(src); src += 2;
 			}
 
+			// These are expected to be nonzero in 11.bin, zero in 11{a,b,c}.bin.
 			cal->header[set].vgsk_min = read_word(src); src += 2;
 			cal->header[set].vgsk_max = read_word(src); src += 2;
 			cal->header[set].histogram_peak_target = read_float(src); src += 4;
 
+			// These are expected to be zero in 11.bin, nonzero in 11{a,b,c}.bin.
 			for (size_t i = 0; i < 3; ++i) {
 				cal->header[set].delta_thermistor[i] = read_float(src); src += 4;
 			}
@@ -504,7 +508,7 @@ select_th(const struct thermapp_cal *cal)
 }
 
 int
-thermapp_cal_select(struct thermapp_cal *cal, struct thermapp_usb_dev *dev, enum thermapp_video_mode video_mode, float temp_therm)
+thermapp_cal_select(struct thermapp_cal *cal, struct thermapp_usb_dev *dev, enum thermapp_video_mode video_mode, float temp_therm, uint16_t *vgsk)
 {
 	enum thermapp_cal_set set;
 	if (video_mode == VIDEO_MODE_THERMOGRAPHY
@@ -552,7 +556,7 @@ thermapp_cal_select(struct thermapp_cal *cal, struct thermapp_usb_dev *dev, enum
 		cal->delta_thermistor      = cal->header[set].delta_thermistor;
 		cal->dist_param            = cal->header[set].dist_param;
 
-		// The app sends the entire header, except word 0x0d
+		// The app updates and sends the entire header, except word 0x0d
 		// which is sometimes left as-is or set to 2500 as done here.
 		if (cal->ver_format == 2) {
 			uint16_t word_0x0d = 2500;
@@ -564,10 +568,11 @@ thermapp_cal_select(struct thermapp_cal *cal, struct thermapp_usb_dev *dev, enum
 		// Assume the preamble words (0x00-0x03) must not change for the device to recognize the header.
 		// Assume the control words (0x04, 0x0b-0x0c) shouldn't change as part of changing calibration sets.
 		// Assume the status words (0x05-0x0a, 0x0e-0x0f, 0x19-0x1b) are ignored by the device.
-		// Update the remainder (0x10-0x18, 0x1c-0x1f) only.  Note that word 0x12 is dynamically updated elsewhere.
+		// Update the remainder (0x10-0x18, 0x1c-0x1f) only.  Note that word 0x12 may be dynamically updated elsewhere.
 		// Don't actually send the header yet, let the caller do it after word 0x12 has been updated.
 		thermapp_usb_cfg_write(dev, &cal->header[set].cfg.word[0x10], sizeof (uint16_t) * 0x10, sizeof (uint16_t) * 0x09);
 		thermapp_usb_cfg_write(dev, &cal->header[set].cfg.word[0x1c], sizeof (uint16_t) * 0x1c, sizeof (uint16_t) * 0x04);
+		*vgsk = cal->header[set].cfg.word[0x12];
 	} else {
 		cal->nuc_offset       = cal->auto_offset;
 		cal->nuc_px           = NULL;
@@ -596,6 +601,7 @@ thermapp_cal_select(struct thermapp_cal *cal, struct thermapp_usb_dev *dev, enum
 		}
 		thermapp_usb_cfg_write(dev, &thermapp_initial_cfg.word[0x10], sizeof (uint16_t) * 0x10, sizeof (uint16_t) * 0x09);
 		thermapp_usb_cfg_write(dev, &thermapp_initial_cfg.word[0x1c], sizeof (uint16_t) * 0x1c, sizeof (uint16_t) * 0x04);
+		*vgsk = thermapp_initial_cfg.word[0x12];
 	}
 	cal->cur_set = set;
 	return 1;

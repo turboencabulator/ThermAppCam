@@ -15,9 +15,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
-
-#define CLOCK_SOURCE CLOCK_MONOTONIC
 
 #define VIDEO_DEVICE "/dev/video0"
 
@@ -367,15 +364,6 @@ v4l2_format_select(int fdwr,
 	return ret;
 }
 
-static float
-timespec_delta(struct timespec end, struct timespec start)
-{
-	struct timespec delta;
-	delta.tv_nsec = end.tv_nsec - start.tv_nsec;
-	delta.tv_sec  = end.tv_sec  - start.tv_sec;
-	return (float)delta.tv_sec + (float)delta.tv_nsec / 1e9f;
-}
-
 int
 main(int argc, char *argv[])
 {
@@ -455,14 +443,7 @@ main(int argc, char *argv[])
 	int resume_req = 2;
 	int ident_frame = 1;
 	int autocal_frame = 0;
-	int temp_settle_frame = 0;
-	int transient_steps = 0;
-	double temp_fpa = 0.0;
-	double temp_therm = 0.0;
-	double old_temp_delta = 0.0;
-	double old_deriv_temp_delta = 0.0;
-	struct timespec transient_start = { 0 };
-	struct timespec transient_step_start = { 0 };
+	struct thermapp_dev_temp dt = { 0 };
 	uint16_t vgsk = thermapp_initial_cfg.VoutC;
 	uint8_t palette_index[UINT16_MAX+1];
 	memset(palette_index, 0, sizeof palette_index);
@@ -526,12 +507,7 @@ main(int argc, char *argv[])
 			}
 
 			// Restart temp sensor measurements.
-			clock_gettime(CLOCK_SOURCE, &transient_start);
-			transient_step_start = transient_start;
-			transient_steps = thermcal->transient_steps_max;
-			temp_settle_frame = 11;
-			old_temp_delta = NAN;
-			old_deriv_temp_delta = NAN;
+			thermapp_temp_init(&dt, thermcal);
 
 			// Use factory cal and/or restart autocal.
 			if (thermapp_cal_present(thermcal)) {
@@ -549,49 +525,8 @@ main(int argc, char *argv[])
 			continue;
 		}
 
-		double raw_temp = frame.header.temp_fpa_diode;
-		double cur_temp_fpa = thermcal->coeffs_fpa_diode[1];
-		cur_temp_fpa = fma(cur_temp_fpa, raw_temp, thermcal->coeffs_fpa_diode[0]);
-		raw_temp = frame.header.temp_thermistor;
-		double cur_temp_therm = thermcal->coeffs_thermistor[5];
-		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[4]);
-		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[3]);
-		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[2]);
-		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[1]);
-		cur_temp_therm = fma(cur_temp_therm, raw_temp, thermcal->coeffs_thermistor[0]);
-		if (temp_settle_frame) {
-			temp_settle_frame -= 1;
-			temp_fpa   = cur_temp_fpa;
-			temp_therm = cur_temp_therm;
-		} else {
-			temp_fpa   = thermcal->beta_fpa_diode  * temp_fpa   + (1.0 - thermcal->beta_fpa_diode)  * cur_temp_fpa;
-			temp_therm = thermcal->beta_thermistor * temp_therm + (1.0 - thermcal->beta_thermistor) * cur_temp_therm;
-		}
-
-		double temp_delta = temp_therm - temp_fpa;
-		if (transient_steps) {
-			struct timespec now;
-			clock_gettime(CLOCK_SOURCE, &now);
-			if (timespec_delta(now, transient_step_start) > thermcal->transient_step_time) {
-				transient_step_start = now;
-				if (timespec_delta(now, transient_start) >= thermcal->transient_oper_time
-				 || fabs(temp_delta) > thermcal->temp_delta_max) {
-					transient_steps = 0;
-				} else if (!isnan(old_temp_delta)) {
-					double deriv_temp_delta = temp_delta - old_temp_delta;
-					if (!isnan(old_deriv_temp_delta)) {
-						deriv_temp_delta = thermcal->beta_deriv_temp_delta * old_deriv_temp_delta + (1.0 - thermcal->beta_deriv_temp_delta) * deriv_temp_delta;
-						if (fabs(deriv_temp_delta) < thermcal->deriv_temp_delta_min) {
-							transient_steps -= 1;
-						} else {
-							transient_steps = thermcal->transient_steps_max;
-						}
-					}
-					old_deriv_temp_delta = deriv_temp_delta;
-				}
-				old_temp_delta = temp_delta;
-			}
-		}
+		thermapp_temp_update(&dt, thermcal, &frame);
+		thermapp_temp_transient(&dt, thermcal);
 
 		// All autocal and image processing below expects the image size to match that of the ident frame.
 		if (frame.header.data_w != thermcal->img_w
@@ -669,7 +604,7 @@ main(int argc, char *argv[])
 		// it.  The process repeats, with frame 3 reporting the vgsk/VoutC computed
 		// from frame 1 but with its pixel values retreating because of frame 2,
 		// resulting in a larger step than desired toward the target value.
-		if (!thermapp_cal_select(thermcal, thermdev, video_mode, temp_therm, &vgsk)
+		if (!thermapp_cal_select(thermcal, thermdev, video_mode, dt.temp_therm, &vgsk)
 		 && vgsk == frame.header.VoutC) {
 			thermapp_img_vgsk(thermcal, &frame, &vgsk);
 			thermapp_usb_cfg_write(thermdev, &vgsk, offsetof(union thermapp_cfg, VoutC), sizeof vgsk);
@@ -687,7 +622,7 @@ main(int argc, char *argv[])
 		double t_min, t_max;
 		size_t i_min, i_max;
 		div_t xy_min, xy_max;
-		thermapp_img_nuc(thermcal, &frame, uniform, !!transient_steps, temp_delta);
+		thermapp_img_nuc(thermcal, &frame, uniform, !!dt.transient_steps, dt.temp_delta);
 		thermapp_img_bpr(thermcal, uniform);
 		thermapp_img_minmax(thermcal, uniform, NULL, NULL, &i_min, &i_max, &t_min, &t_max, 20.0, 0.95);
 		thermapp_img_quantize(thermcal, uniform, quantized);
@@ -709,7 +644,7 @@ main(int argc, char *argv[])
 
 		uint32_t frame_num = frame.header.frame_num_lo
 		                   | frame.header.frame_num_hi << 16;
-		printf("\rFrame #%" PRIu32 ":  FPA: %f C  Thermistor: %f C  Range: [%f:%f] @ (%d,%d):(%d,%d)", frame_num, cur_temp_fpa, cur_temp_therm, t_min, t_max, xy_min.rem, xy_min.quot, xy_max.rem, xy_max.quot);
+		printf("\rFrame #%" PRIu32 ":  FPA: %f C  Thermistor: %f C  Range: [%f:%f] @ (%d,%d):(%d,%d)", frame_num, dt.cur_temp_fpa, dt.cur_temp_therm, t_min, t_max, xy_min.rem, xy_min.quot, xy_max.rem, xy_max.quot);
 		fflush(stdout);
 
 		const uint16_t *in = quantized;

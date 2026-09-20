@@ -7,6 +7,7 @@
 
 #include <libusb.h>
 #include <stdint.h>
+#include <time.h>
 
 #define VENDOR  0x1772
 #define PRODUCT 0x0002
@@ -185,6 +186,23 @@ struct thermapp_cal {
 	float auto_offset[FRAME_PIXELS_MAX];
 };
 
+struct thermapp_dev_temp {
+	// State variables
+	int temp_settle_frame;
+	int transient_steps;
+	struct timespec transient_start;
+	struct timespec transient_step_start;
+	double old_temp_delta;
+	double old_deriv_temp_delta;
+
+	// Outputs
+	double cur_temp_fpa;
+	double cur_temp_therm;
+	double temp_fpa;
+	double temp_therm;
+	double temp_delta;
+};
+
 
 extern const union thermapp_cfg thermapp_initial_cfg;
 
@@ -201,6 +219,10 @@ int thermapp_cal_present(const struct thermapp_cal *);
 void thermapp_cal_bpr_init(struct thermapp_cal *);
 int thermapp_cal_select(struct thermapp_cal *, struct thermapp_usb_dev *, enum thermapp_video_mode, float, uint16_t *);
 void thermapp_cal_close(struct thermapp_cal *);
+
+void thermapp_temp_init(struct thermapp_dev_temp *, const struct thermapp_cal *);
+void thermapp_temp_update(struct thermapp_dev_temp *, const struct thermapp_cal *, const union thermapp_frame *);
+void thermapp_temp_transient(struct thermapp_dev_temp *, const struct thermapp_cal *);
 
 void thermapp_img_vgsk(const struct thermapp_cal *, const union thermapp_frame *, uint16_t *);
 void thermapp_img_nuc(const struct thermapp_cal *, const union thermapp_frame *, float *, int, float);

@@ -130,6 +130,7 @@ struct thermapp_cal {
 	const float *transient_offset; // 22{a,b,c}.bin
 	const float *transient_delta;  // 21{a,b,c}.bin
 
+	const union thermapp_cfg *cfg;
 	uint16_t vgsk_min;
 	uint16_t vgsk_max;
 	double histogram_peak_target;

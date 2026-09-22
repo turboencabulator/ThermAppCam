@@ -550,29 +550,12 @@ thermapp_cal_select(struct thermapp_cal *cal, struct thermapp_usb_dev *dev, enum
 		cal->transient_offset = (const float *)cal->raw_buf[set][22];
 		cal->transient_delta  = (const float *)cal->raw_buf[set][21];
 
-		cal->vgsk_min              = cal->header[set].vgsk_min;
-		cal->vgsk_max              = cal->header[set].vgsk_max;
-		cal->histogram_peak_target = cal->header[set].histogram_peak_target;
-		cal->delta_thermistor      = cal->header[set].delta_thermistor;
-		cal->dist_param            = cal->header[set].dist_param;
-
-		// The app updates and sends the entire header, except word 0x0d
-		// which is sometimes left as-is or set to 2500 as done here.
-		if (cal->ver_format == 2) {
-			uint16_t word_0x0d = 2500;
-			thermapp_usb_cfg_write(dev, &word_0x0d, sizeof (uint16_t) * 0x0d, sizeof (uint16_t));
-		} else if (cal->ver_format == 0) {
-			thermapp_usb_cfg_write(dev, &cal->header[set].cfg.word[0x0d], sizeof (uint16_t) * 0x0d, sizeof (uint16_t));
-		}
-		// Skip sending the entire header:
-		// Assume the preamble words (0x00-0x03) must not change for the device to recognize the header.
-		// Assume the control words (0x04, 0x0b-0x0c) shouldn't change as part of changing calibration sets.
-		// Assume the status words (0x05-0x0a, 0x0e-0x0f, 0x19-0x1b) are ignored by the device.
-		// Update the remainder (0x10-0x18, 0x1c-0x1f) only.  Note that word 0x12 may be dynamically updated elsewhere.
-		// Don't actually send the header yet, let the caller do it after word 0x12 has been updated.
-		thermapp_usb_cfg_write(dev, &cal->header[set].cfg.word[0x10], sizeof (uint16_t) * 0x10, sizeof (uint16_t) * 0x09);
-		thermapp_usb_cfg_write(dev, &cal->header[set].cfg.word[0x1c], sizeof (uint16_t) * 0x1c, sizeof (uint16_t) * 0x04);
-		*vgsk = cal->header[set].cfg.word[0x12];
+		cal->cfg                   = &cal->header[set].cfg;
+		cal->vgsk_min              =  cal->header[set].vgsk_min;
+		cal->vgsk_max              =  cal->header[set].vgsk_max;
+		cal->histogram_peak_target =  cal->header[set].histogram_peak_target;
+		cal->delta_thermistor      =  cal->header[set].delta_thermistor;
+		cal->dist_param            =  cal->header[set].dist_param;
 	} else {
 		cal->nuc_offset       = cal->auto_offset;
 		cal->nuc_px           = NULL;
@@ -589,20 +572,37 @@ thermapp_cal_select(struct thermapp_cal *cal, struct thermapp_usb_dev *dev, enum
 		cal->transient_offset = NULL;
 		cal->transient_delta  = NULL;
 
+		cal->cfg                   = &thermapp_initial_cfg;
 		cal->vgsk_min              = 0;
 		cal->vgsk_max              = 0;
 		cal->histogram_peak_target = 0.0;
 		cal->delta_thermistor      = NULL;
 		cal->dist_param            = NULL;
-
-		// Revert the above header changes to the initial values used during autocal.
-		if (cal->ver_format == 2) {
-			thermapp_usb_cfg_write(dev, &thermapp_initial_cfg.word[0x0d], sizeof (uint16_t) * 0x0d, sizeof (uint16_t));
-		}
-		thermapp_usb_cfg_write(dev, &thermapp_initial_cfg.word[0x10], sizeof (uint16_t) * 0x10, sizeof (uint16_t) * 0x09);
-		thermapp_usb_cfg_write(dev, &thermapp_initial_cfg.word[0x1c], sizeof (uint16_t) * 0x1c, sizeof (uint16_t) * 0x04);
-		*vgsk = thermapp_initial_cfg.word[0x12];
 	}
+
+	// The app sets its outgoing header to the one in 11{,a,b,c}.bin,
+	// except word 0x0d which is handled as follows:
+	//   ver_format == 0:  Set from header like all other words
+	//   ver_format == 2:  Set to 2500
+	//   else:             Preserve current value
+	// Revert all changes (back to the initial config) when using the autocal set.
+	if (cal->ver_format == 0 || cal->ver_format == 2) {
+		uint16_t cfg_word_0x0d = (cal->ver_format == 2 && set < CAL_SETS) ? 2500 : cal->cfg->word[0x0d];
+		thermapp_usb_cfg_write(dev, &cfg_word_0x0d, sizeof (uint16_t) * 0x0d, sizeof (uint16_t));
+	}
+
+	// Skip sending the entire header:
+	// Assume the preamble words (0x00-0x03) must not change for the device to recognize the header.
+	// Assume the control words (0x04, 0x0b-0x0c) shouldn't change as part of changing calibration sets.
+	// Assume the status words (0x05-0x0a, 0x0e-0x0f, 0x19-0x1b) are ignored by the device.
+	// Update the remainder (0x10-0x18, 0x1c-0x1f) only.  Note that word 0x12 may be dynamically updated elsewhere.
+	thermapp_usb_cfg_write(dev, &cal->cfg->word[0x10], sizeof (uint16_t) * 0x10, sizeof (uint16_t) * 0x09);
+	thermapp_usb_cfg_write(dev, &cal->cfg->word[0x1c], sizeof (uint16_t) * 0x1c, sizeof (uint16_t) * 0x04);
+
+	// Don't actually send the header yet, let the caller do it after word 0x12 has been updated.
+	// Update the caller's copy of outgoing word 0x12.
+	*vgsk = cal->cfg->word[0x12];
+
 	cal->cur_set = set;
 	return 1;
 }

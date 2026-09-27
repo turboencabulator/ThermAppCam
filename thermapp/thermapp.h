@@ -56,7 +56,7 @@ union thermapp_cfg {
 		uint16_t fpa_w;
 		uint16_t data_h;
 		uint16_t data_w;
-		uint16_t word_0x0d;
+		uint16_t frame_limit;
 		int16_t  temp_thermistor;
 		uint16_t temp_fpa_diode;
 		uint16_t VoutA; //DCoffset;// AD5628 VoutA, Range: 0V - 2.45V, max 2048

@@ -481,6 +481,20 @@ main(int argc, char *argv[])
 			// last packet of the (nonexistent) frame before the first one.
 			uint16_t mode = 1;
 			thermapp_usb_cfg_write(thermdev, &mode, offsetof(union thermapp_cfg, modes), sizeof mode);
+
+			// Force image size to sensor size.  Probably not necessary.
+			thermapp_usb_cfg_write(thermdev, &frame.header.fpa_h, offsetof(union thermapp_cfg, data_h), 2 * sizeof (uint16_t));
+
+			// The app sets its outgoing header to the one in 11{,a,b,c}.bin,
+			// except word 0x0d (frame_limit) which is handled as follows:
+			//   ver_format == 0:  Set from header like all other words
+			//   ver_format == 2:  Set to 2500
+			//   else:             Preserve current value
+			// Using 640x480 as a proxy for ver_format in case we don't have calibration data.
+			// Assume all other cameras are happy with the default value of 25.
+			uint16_t frame_limit = frame.header.fpa_w == 640 ? 2500 : 25;
+			thermapp_usb_cfg_write(thermdev, &frame_limit, offsetof(union thermapp_cfg, frame_limit), sizeof frame_limit);
+
 			thermapp_usb_cfg_write(thermdev, NULL, 0, 0);
 
 			thermcal = thermapp_cal_open(caldir, &frame.header);

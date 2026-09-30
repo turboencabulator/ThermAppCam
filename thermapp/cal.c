@@ -580,22 +580,9 @@ thermapp_cal_select(struct thermapp_cal *cal, struct thermapp_usb_dev *dev, enum
 		cal->dist_param            = NULL;
 	}
 
-	// The app sets its outgoing header to the one in 11{,a,b,c}.bin,
-	// except word 0x0d (frame_limit) which is handled as follows:
-	//   ver_format == 0:  Set from header like all other words
-	//   ver_format == 2:  Set to 2500
-	//   else:             Preserve current value
-	// Revert all changes (back to the initial config) when using the autocal set.
-	// TODO: If this word has no impact on calibration, set it once (elsewhere,
-	//       with words 0x0b and 0x0c for frame size) and don't touch it here.
-	if (cal->ver_format == 0 || cal->ver_format == 2) {
-		uint16_t cfg_frame_limit = (cal->ver_format == 2 && set < CAL_SETS) ? 2500 : cal->cfg->frame_limit;
-		thermapp_usb_cfg_write(dev, &cfg_frame_limit, sizeof (uint16_t) * 0x0d, sizeof (uint16_t));
-	}
-
 	// Skip sending the entire header:
 	// Assume the preamble words (0x00-0x03) must not change for the device to recognize the header.
-	// Assume the control words (0x04, 0x0b-0x0c) shouldn't change as part of changing calibration sets.
+	// Assume the control words (0x04, 0x0b-0x0d) shouldn't change as part of changing calibration sets.
 	// Assume the status words (0x05-0x0a, 0x0e-0x0f, 0x19-0x1b) are ignored by the device.
 	// Update the remainder (0x10-0x18, 0x1c-0x1f) only.  Note that word 0x12 may be dynamically updated elsewhere.
 	thermapp_usb_cfg_write(dev, &cal->cfg->word[0x10], sizeof (uint16_t) * 0x10, sizeof (uint16_t) * 0x09);

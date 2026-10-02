@@ -235,4 +235,6 @@ void thermapp_img_quantize(const struct thermapp_cal *, const float *, uint16_t 
 void thermapp_img_hpf(const struct thermapp_cal *, uint16_t *, float);
 void thermapp_img_lut(const struct thermapp_cal *, const uint16_t *, uint8_t *, float, float);
 
+const uint32_t *thermapp_pal_select(const char *, uint32_t *);
+
 #endif /* THERMAPP_H */

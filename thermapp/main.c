@@ -443,6 +443,7 @@ main(int argc, char *argv[])
 	int resume_req = 2;
 	int ident_frame = 1;
 	int autocal_frame = 0;
+	int autocal_frame_init = 50;
 	struct thermapp_dev_temp dt = { 0 };
 	uint16_t vgsk = thermapp_initial_cfg.VoutC;
 	uint8_t palette_index[UINT16_MAX+1];
@@ -527,7 +528,7 @@ main(int argc, char *argv[])
 			if (thermapp_cal_present(thermcal)) {
 				thermapp_cal_bpr_init(thermcal);
 			} else {
-				autocal_frame = 50;
+				autocal_frame = autocal_frame_init;
 				printf("Calibrating... cover the lens!\n");
 			}
 
@@ -550,54 +551,16 @@ main(int argc, char *argv[])
 
 		if (autocal_frame) {
 			autocal_frame -= 1;
-			printf("\rCaptured calibration frame %d/50. Keep lens covered.", 50 - autocal_frame);
+			printf("\rCaptured calibration frame %d/%d. Keep lens covered.", autocal_frame_init - autocal_frame, autocal_frame_init);
 			fflush(stdout);
-
-			const uint16_t *pixels = (const uint16_t *)&frame.bytes[frame.header.data_offset];
-			size_t nuc_start = thermcal->ofs_y * thermcal->nuc_w + thermcal->ofs_x;
-			size_t nuc_row_adj = thermcal->nuc_w - thermcal->img_w;
-			float *nuc_good, *nuc_offset;
-
-			nuc_offset = &thermcal->auto_offset[nuc_start];
-			for (size_t y = thermcal->img_h; y; --y) {
-				for (size_t x = thermcal->img_w; x; --x) {
-					*nuc_offset++ += *pixels++;
-				}
-				nuc_offset += nuc_row_adj;
-			}
+			thermapp_cal_auto_capture(thermcal, &frame);
 
 			// Skip image processing until autocal data is ready to use.
 			if (autocal_frame) {
 				continue;
 			}
 			printf("\nCalibration finished\n");
-
-			double meancal = 0.0;
-			nuc_offset = &thermcal->auto_offset[nuc_start];
-			for (size_t y = thermcal->img_h; y; --y) {
-				for (size_t x = thermcal->img_w; x; --x) {
-					*nuc_offset /= -50.0f;
-					meancal += *nuc_offset++;
-				}
-				nuc_offset += nuc_row_adj;
-			}
-			meancal /= thermcal->img_w * thermcal->img_h;
-			// record the bad pixels
-			nuc_good   = &thermcal->auto_good[nuc_start];
-			nuc_offset = &thermcal->auto_offset[nuc_start];
-			for (size_t y = thermcal->img_h; y; --y) {
-				for (size_t x = thermcal->img_w; x; --x) {
-					if (fabs(*nuc_offset - meancal) > 250.0) {
-						printf("Bad pixel (%zu,%zu) (%f vs %f)\n", thermcal->img_w - x, thermcal->img_h - y, *nuc_offset, meancal);
-					} else {
-						*nuc_good = 1.0f;
-					}
-					nuc_good   += 1;
-					nuc_offset += 1;
-				}
-				nuc_good   += nuc_row_adj;
-				nuc_offset += nuc_row_adj;
-			}
+			thermapp_cal_auto_average(thermcal, autocal_frame_init);
 			thermapp_cal_bpr_init(thermcal);
 		}
 

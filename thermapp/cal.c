@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include <inttypes.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -415,6 +416,58 @@ thermapp_cal_open(const char *dir, const union thermapp_cfg *header)
 
 err:
 	return cal;
+}
+
+void
+thermapp_cal_auto_capture(struct thermapp_cal *cal, const union thermapp_frame *frame)
+{
+	const uint16_t *pixels = (const uint16_t *)&frame->bytes[frame->header.data_offset];
+	size_t nuc_start = cal->ofs_y * cal->nuc_w + cal->ofs_x;
+	size_t nuc_row_adj = cal->nuc_w - cal->img_w;
+
+	float *nuc_offset = &cal->auto_offset[nuc_start];
+	for (size_t y = cal->img_h; y; --y) {
+		for (size_t x = cal->img_w; x; --x) {
+			*nuc_offset++ += *pixels++;
+		}
+		nuc_offset += nuc_row_adj;
+	}
+}
+
+void
+thermapp_cal_auto_average(struct thermapp_cal *cal, size_t frames)
+{
+	size_t nuc_start = cal->ofs_y * cal->nuc_w + cal->ofs_x;
+	size_t nuc_row_adj = cal->nuc_w - cal->img_w;
+	float *nuc_good, *nuc_offset;
+
+	double meancal = 0.0;
+	nuc_offset = &cal->auto_offset[nuc_start];
+	for (size_t y = cal->img_h; y; --y) {
+		for (size_t x = cal->img_w; x; --x) {
+			*nuc_offset /= -(float)frames;
+			meancal += *nuc_offset++;
+		}
+		nuc_offset += nuc_row_adj;
+	}
+	meancal /= cal->img_w * cal->img_h;
+
+	// Record the bad pixels
+	nuc_good   = &cal->auto_good[nuc_start];
+	nuc_offset = &cal->auto_offset[nuc_start];
+	for (size_t y = cal->img_h; y; --y) {
+		for (size_t x = cal->img_w; x; --x) {
+			if (fabs(*nuc_offset - meancal) > 250.0) {
+				printf("Bad pixel (%zu,%zu) (%f vs %f)\n", cal->img_w - x, cal->img_h - y, *nuc_offset, meancal);
+			} else {
+				*nuc_good = 1.0f;
+			}
+			nuc_good   += 1;
+			nuc_offset += 1;
+		}
+		nuc_good   += nuc_row_adj;
+		nuc_offset += nuc_row_adj;
+	}
 }
 
 static size_t

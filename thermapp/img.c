@@ -271,18 +271,30 @@ thermapp_img_minmax(const struct thermapp_cal *cal, const float *in_px, float *o
 	if (out_t_max) *out_t_max = t_max;
 }
 
+static unsigned
+quantize(float temp_cC)
+{
+	int temp_q = (int)temp_cC + 5000;
+	if (temp_q < 0) {
+		return 0;
+	} else if (temp_q > UINT16_MAX) {
+		return UINT16_MAX;
+	} else {
+		return temp_q;
+	}
+}
+
+static float
+dequantize(unsigned temp_q)
+{
+	return (float)((int)temp_q - 5000);
+}
+
 void
 thermapp_img_quantize(const struct thermapp_cal *cal, const float *in, uint16_t *out)
 {
 	for (size_t i = cal->img_w * cal->img_h; i; --i) {
-		float px = *in++ + 5000;
-		if (px > UINT16_MAX) {
-			*out++ = UINT16_MAX;
-		} else if (px < 0) {
-			*out++ = 0;
-		} else {
-			*out++ = (int)px;
-		}
+		*out++ = quantize(*in++);
 	}
 }
 
@@ -384,7 +396,7 @@ thermapp_img_hpf(const struct thermapp_cal *cal, uint16_t *io, float enhanced_ra
 }
 
 void
-thermapp_img_lut(const struct thermapp_cal *cal, const uint16_t *in, uint8_t *lut, float ignore_ratio, float max_gain)
+thermapp_img_lut(const struct thermapp_cal *cal, const uint16_t *in, uint8_t *lut, float *scale_lo, float *scale_hi, float ignore_ratio, float max_gain)
 {
 	unsigned bins[UINT16_MAX+1];
 	memset(bins, 0, sizeof bins);
@@ -394,34 +406,48 @@ thermapp_img_lut(const struct thermapp_cal *cal, const uint16_t *in, uint8_t *lu
 		bins[*in++] += 1;
 	}
 
-	// Optionally discard outlier bins.
+	// Optionally discard outlier bins (manual with scale_lo/hi, or auto with ignore_ratio).
 	// ignore_ratio: range = [0.0f:1.0f), default = 0.0f to match the app,
 	// but in practice should be [0.0f:0.5f) otherwise all bins are discarded.
+	// The app UI calls this "scale truncation" and offers values 0, 0.0001, 0.00025,
+	// and 0.0005 to 0.0150 in 0.0005 increments, with its own default of 0.0025.
 	unsigned ignore_px = ignore_ratio * (cal->img_w * cal->img_h);
-	unsigned n = 0;
-	size_t lo = 0, hi = UINT16_MAX+1;
-	while (n < ignore_px && hi) {
-		hi -= 1;
-		n += bins[hi];
-		bins[hi] = 0;
-	}
-	n = 0;
-	while (n < ignore_px && lo < hi) {
-		n += bins[lo];
-		bins[lo] = 0;
-		lo += 1;
-	}
-
-	// Number the non-empty bins from 1 to n.
-	n = 0;
-	for (size_t i = lo; i < UINT16_MAX+1; ++i) {
-		if (bins[i]) {
-			n += 1;
+	size_t lo, hi;
+	if (isfinite(*scale_hi)) {
+		hi = quantize(*scale_hi * 100.0f);
+	} else {
+		unsigned ignored = 0;
+		for (hi = UINT16_MAX+1; hi > 0 && (ignored < ignore_px || !bins[hi-1]); --hi) {
+			ignored += bins[hi-1];
 		}
-		bins[i] = n;
+		if (hi > 0) hi -= 1;
+	}
+	if (isfinite(*scale_lo)) {
+		lo = quantize(*scale_lo * 100.0f);
+	} else {
+		unsigned ignored = 0;
+		for (lo = 0; lo < UINT16_MAX+1 && (ignored < ignore_px || !bins[lo]); ++lo) {
+			ignored += bins[lo];
+		}
 	}
 
-	// Scale the bins range-axis from [0:n] to [0:UINT8_MAX], then filter.
+	// Number the non-empty bins in [lo:hi] from 1 to n.
+	// lo > hi implies n == 0 (but not vice-versa).
+	// TODO: Linear interpolate between lo and hi if one or both are fixed?
+	unsigned n = 0;
+	size_t i = 0;
+	while (i < lo) {
+		bins[i++] = n;
+	}
+	while (i <= hi) {
+		if (bins[i]) n += 1;
+		bins[i++] = n;
+	}
+	while (i < UINT16_MAX+1) {
+		bins[i++] = n;
+	}
+
+	// Scale (normalize) the bins range-axis from [0:n] to [0:UINT8_MAX] (same length as palettes), then filter.
 	// max_gain, when enabled: 3.0f (TH, Enhanced), 0.45f (TH, Thermography), 1.0f (otherwise) to match the app.
 #define LUT_SCALE 8
 #define LUT_RANGE_SCALED (((UINT8_MAX+1) << LUT_SCALE) - 1)
@@ -438,4 +464,7 @@ thermapp_img_lut(const struct thermapp_cal *cal, const uint16_t *in, uint8_t *lu
 #define LUT_BETA ((1 << 8) - LUT_ALPHA)  // 230/256 ~= 0.9
 		lut[i] = (LUT_BETA * lut[i] + LUT_ALPHA * new) >> 8;
 	}
+
+	*scale_lo = dequantize(lo) / 100.0f;
+	*scale_hi = dequantize(hi) / 100.0f;
 }

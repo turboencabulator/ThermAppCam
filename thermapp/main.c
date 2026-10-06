@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include <inttypes.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -360,6 +361,7 @@ main(int argc, char *argv[])
 		double t_min, t_max;
 		size_t i_min, i_max;
 		div_t xy_min, xy_max;
+		float scale_min = -INFINITY, scale_max = INFINITY;
 		thermapp_img_nuc(thermcal, &frame, uniform, !!dt.transient_steps, dt.temp_delta);
 		thermapp_img_bpr(thermcal, uniform);
 		thermapp_img_minmax(thermcal, uniform, NULL, NULL, &i_min, &i_max, &t_min, &t_max, 20.0, 0.95);
@@ -367,7 +369,13 @@ main(int argc, char *argv[])
 		if (video_mode == VIDEO_MODE_ENHANCED) {
 			thermapp_img_hpf(thermcal, quantized, enhanced_ratio);
 		}
-		thermapp_img_lut(thermcal, quantized, palette_index, 0.0f, 0.0f);
+		if (video_mode == VIDEO_MODE_ENHANCED || thermcal->cur_set == CAL_SETS) {
+			// Image values won't make sense for manual scale truncation.
+			// TODO: Avoid displaying scale_min/max values.
+			scale_min = -INFINITY;
+			scale_max =  INFINITY;
+		}
+		thermapp_img_lut(thermcal, quantized, palette_index, &scale_min, &scale_max, 0.0f, 0.0f);
 
 		xy_min = div(i_min, thermcal->img_w);
 		xy_max = div(i_max, thermcal->img_w);
@@ -382,7 +390,7 @@ main(int argc, char *argv[])
 
 		uint32_t frame_num = frame.header.frame_num_lo
 		                   | frame.header.frame_num_hi << 16;
-		printf("\rFrame #%" PRIu32 ":  FPA: %f C  Thermistor: %f C  Range: [%f:%f] @ (%d,%d):(%d,%d)", frame_num, dt.cur_temp_fpa, dt.cur_temp_therm, t_min, t_max, xy_min.rem, xy_min.quot, xy_max.rem, xy_max.quot);
+		printf("\rFrame #%" PRIu32 ":  FPA: %f C  Thermistor: %f C  Scale: [%f:%f]  Range: [%f:%f] @ (%d,%d):(%d,%d)", frame_num, dt.cur_temp_fpa, dt.cur_temp_therm, scale_min, scale_max, t_min, t_max, xy_min.rem, xy_min.quot, xy_max.rem, xy_max.quot);
 		fflush(stdout);
 
 		const uint16_t *in = quantized;

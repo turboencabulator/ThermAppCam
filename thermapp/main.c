@@ -10,7 +10,6 @@
 #include <unistd.h>
 
 #include <inttypes.h>
-#include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -208,6 +207,11 @@ main(int argc, char *argv[])
 	int autocal_frame_init = 50;
 	struct thermapp_dev_temp dt = { 0 };
 	uint16_t vgsk = thermapp_initial_cfg.VoutC;
+	int manual_lo = 0;
+	int manual_hi = 0;
+	float scale_temps_cC[2] = { 0.0f * 100.0f, 0.0f * 100.0f };
+	float ignore_ratio = 0.0f;
+	float max_gain = 0.0f;
 	uint8_t palette_index[UINT16_MAX+1];
 	memset(palette_index, 0, sizeof palette_index);
 
@@ -358,24 +362,22 @@ main(int argc, char *argv[])
 
 		float uniform[FRAME_PIXELS_MAX];
 		uint16_t quantized[FRAME_PIXELS_MAX];
+		uint16_t scale_temps_q[2];
 		double t_min, t_max;
 		size_t i_min, i_max;
 		div_t xy_min, xy_max;
-		float scale_min = -INFINITY, scale_max = INFINITY;
 		thermapp_img_nuc(thermcal, &frame, uniform, !!dt.transient_steps, dt.temp_delta);
 		thermapp_img_bpr(thermcal, uniform);
 		thermapp_img_minmax(uniform, thermcal->img_w * thermcal->img_h, NULL, NULL, &i_min, &i_max, &t_min, &t_max, 20.0, 0.95);
 		thermapp_img_quantize(quantized, uniform, thermcal->img_w * thermcal->img_h);
+		thermapp_img_quantize(scale_temps_q, scale_temps_cC, 2);
 		if (video_mode == VIDEO_MODE_ENHANCED) {
 			thermapp_img_hpf(quantized, thermcal->img_w, thermcal->img_h, enhanced_ratio);
 		}
-		if (video_mode == VIDEO_MODE_ENHANCED || thermcal->cur_set == CAL_SETS) {
-			// Image values won't make sense for manual scale truncation.
-			// TODO: Avoid displaying scale_min/max values.
-			scale_min = -INFINITY;
-			scale_max =  INFINITY;
-		}
-		thermapp_img_lut(palette_index, quantized, thermcal->img_w * thermcal->img_h, &scale_min, &scale_max, 0.0f, 0.0f);
+		// Manual scale truncation enabled only when quantized can be converted to a temperature.
+		// TODO: Avoid displaying temperature values when disabled.
+		int manual_en = video_mode != VIDEO_MODE_ENHANCED && thermcal->cur_set != CAL_SETS;
+		thermapp_img_lut(palette_index, quantized, thermcal->img_w * thermcal->img_h, scale_temps_q, ignore_ratio, max_gain, manual_en && manual_lo, manual_en && manual_hi);
 
 		xy_min = div(i_min, thermcal->img_w);
 		xy_max = div(i_max, thermcal->img_w);
@@ -390,7 +392,9 @@ main(int argc, char *argv[])
 
 		uint32_t frame_num = frame.header.frame_num_lo
 		                   | frame.header.frame_num_hi << 16;
-		printf("\rFrame #%" PRIu32 ":  FPA: %f C  Thermistor: %f C  Scale: [%f:%f]  Range: [%f:%f] @ (%d,%d):(%d,%d)", frame_num, dt.cur_temp_fpa, dt.cur_temp_therm, scale_min, scale_max, t_min, t_max, xy_min.rem, xy_min.quot, xy_max.rem, xy_max.quot);
+		float scale_temps[2];
+		thermapp_img_dequantize(scale_temps, scale_temps_q, 2);
+		printf("\rFrame #%" PRIu32 ":  FPA: %f C  Thermistor: %f C  Scale: [%f:%f]  Range: [%f:%f] @ (%d,%d):(%d,%d)", frame_num, dt.cur_temp_fpa, dt.cur_temp_therm, scale_temps[0] / 100.0f, scale_temps[1] / 100.0f, t_min, t_max, xy_min.rem, xy_min.quot, xy_max.rem, xy_max.quot);
 		fflush(stdout);
 
 		const uint16_t *in = quantized;

@@ -299,6 +299,14 @@ thermapp_img_quantize(uint16_t *out, const float *in, size_t len)
 }
 
 void
+thermapp_img_dequantize(float *out, const uint16_t *in, size_t len)
+{
+	while (len--) {
+		*out++ = dequantize(*in++);
+	}
+}
+
+void
 thermapp_img_hpf(uint16_t *io, size_t w, size_t h, float enhanced_ratio)
 {
 	// Compute HPF(image) as image - LPF(image).
@@ -394,7 +402,7 @@ thermapp_img_hpf(uint16_t *io, size_t w, size_t h, float enhanced_ratio)
 }
 
 void
-thermapp_img_lut(uint8_t *lut, const uint16_t *in, size_t len, float *scale_lo, float *scale_hi, float ignore_ratio, float max_gain)
+thermapp_img_lut(uint8_t *lut, const uint16_t *in, size_t len, uint16_t *scale_temps, float ignore_ratio, float max_gain, int manual_lo, int manual_hi)
 {
 	unsigned bins[UINT16_MAX+1];
 	memset(bins, 0, sizeof bins);
@@ -406,14 +414,14 @@ thermapp_img_lut(uint8_t *lut, const uint16_t *in, size_t len, float *scale_lo, 
 		bins[*in++] += 1;
 	}
 
-	// Optionally discard outlier bins (manual with scale_lo/hi, or auto with ignore_ratio).
+	// Optionally discard outlier bins (manual with scale_temps, or auto with ignore_ratio).
 	// ignore_ratio: range = [0.0f:1.0f), default = 0.0f to match the app,
 	// but in practice should be [0.0f:0.5f) otherwise all bins are discarded.
 	// The app UI calls this "scale truncation" and offers values 0, 0.0001, 0.00025,
 	// and 0.0005 to 0.0150 in 0.0005 increments, with its own default of 0.0025.
 	size_t lo, hi;
-	if (isfinite(*scale_hi)) {
-		hi = quantize(*scale_hi * 100.0f);
+	if (manual_hi) {
+		hi = scale_temps[1];
 	} else {
 		unsigned ignored = 0;
 		for (hi = UINT16_MAX+1; hi > 0 && (ignored < ignore_px || !bins[hi-1]); --hi) {
@@ -421,8 +429,8 @@ thermapp_img_lut(uint8_t *lut, const uint16_t *in, size_t len, float *scale_lo, 
 		}
 		if (hi > 0) hi -= 1;
 	}
-	if (isfinite(*scale_lo)) {
-		lo = quantize(*scale_lo * 100.0f);
+	if (manual_lo) {
+		lo = scale_temps[0];
 	} else {
 		unsigned ignored = 0;
 		for (lo = 0; lo < UINT16_MAX+1 && (ignored < ignore_px || !bins[lo]); ++lo) {
@@ -464,6 +472,6 @@ thermapp_img_lut(uint8_t *lut, const uint16_t *in, size_t len, float *scale_lo, 
 		lut[i] = (LUT_BETA * lut[i] + LUT_ALPHA * new) >> 8;
 	}
 
-	*scale_lo = dequantize(lo) / 100.0f;
-	*scale_hi = dequantize(hi) / 100.0f;
+	scale_temps[0] = lo;
+	scale_temps[1] = hi;
 }

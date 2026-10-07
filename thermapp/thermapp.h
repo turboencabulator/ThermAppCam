@@ -239,5 +239,6 @@ void thermapp_img_hpf(uint16_t *, size_t, size_t, float);
 void thermapp_img_lut(uint8_t *, const uint16_t *, size_t, uint16_t *, float, float, int, int);
 
 const uint32_t *thermapp_pal_select(const char *, uint32_t *);
+void thermapp_pal_interpolate(uint16_t *, size_t, uint16_t, uint16_t);
 
 #endif /* THERMAPP_H */

@@ -209,6 +209,7 @@ main(int argc, char *argv[])
 	uint16_t vgsk = thermapp_initial_cfg.VoutC;
 	double t_refl_K = 20.0 + 273.15;
 	double emissivity = 0.95;
+	int draw_scale = 0;
 	int manual_lo = 0;
 	int manual_hi = 0;
 	float scale_temps_C[2] = { 0.0f, 0.0f };
@@ -364,6 +365,7 @@ main(int argc, char *argv[])
 
 		float uniform[FRAME_PIXELS_MAX];
 		uint16_t quantized[FRAME_PIXELS_MAX];
+		uint16_t scale[FRAME_WIDTH_MAX];
 		uint16_t scale_temps_q[2];
 		float meas_temps[2];
 		size_t i_min, i_max;
@@ -380,6 +382,7 @@ main(int argc, char *argv[])
 		// TODO: Avoid displaying temperature values when disabled.
 		int manual_en = video_mode != VIDEO_MODE_ENHANCED && thermcal->cur_set != CAL_SETS;
 		thermapp_img_lut(palette_index, quantized, thermcal->img_w * thermcal->img_h, scale_temps_q, ignore_ratio, max_gain, manual_en && manual_lo, manual_en && manual_hi);
+		thermapp_pal_interpolate(scale, thermcal->img_w, scale_temps_q[0], scale_temps_q[1]);
 
 		xy_min = div(i_min, thermcal->img_w);
 		xy_max = div(i_max, thermcal->img_w);
@@ -422,6 +425,13 @@ main(int argc, char *argv[])
 				out += out_col_adj;
 			}
 			out += out_row_adj;
+		}
+		if (draw_scale) {
+			out = (uint32_t *)img;
+			out += thermcal->img_w * (thermcal->img_h - 1);
+			for (size_t y = 0; y < thermcal->img_w; ++y) {
+				*out++ = palette[palette_index[scale[y]]];
+			}
 		}
 		write(fdwr, img, img_sz);
 	}

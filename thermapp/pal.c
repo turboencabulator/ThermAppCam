@@ -294,3 +294,16 @@ thermapp_pal_select(const char *name, uint32_t *buf)
 		return NULL;
 	}
 }
+
+void
+thermapp_pal_interpolate(uint16_t *buf, size_t len, uint16_t lo, uint16_t hi)
+{
+	float slope = (float)(hi - lo) / (float)(len - 1);
+	float start = (float)lo;
+	for (size_t x = 0; x < len; ++x) {
+		int y = (int)roundf(start + (float)x * slope);
+		if (y < lo) y = lo;
+		else if (y > hi) y = hi;
+		buf[x] = y;
+	}
+}

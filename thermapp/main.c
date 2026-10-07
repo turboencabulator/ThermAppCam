@@ -207,9 +207,11 @@ main(int argc, char *argv[])
 	int autocal_frame_init = 50;
 	struct thermapp_dev_temp dt = { 0 };
 	uint16_t vgsk = thermapp_initial_cfg.VoutC;
+	double t_refl_K = 20.0 + 273.15;
+	double emissivity = 0.95;
 	int manual_lo = 0;
 	int manual_hi = 0;
-	float scale_temps_cC[2] = { 0.0f * 100.0f, 0.0f * 100.0f };
+	float scale_temps_C[2] = { 0.0f, 0.0f };
 	float ignore_ratio = 0.0f;
 	float max_gain = 0.0f;
 	uint8_t palette_index[UINT16_MAX+1];
@@ -363,14 +365,14 @@ main(int argc, char *argv[])
 		float uniform[FRAME_PIXELS_MAX];
 		uint16_t quantized[FRAME_PIXELS_MAX];
 		uint16_t scale_temps_q[2];
-		double t_min, t_max;
+		float meas_temps[2];
 		size_t i_min, i_max;
 		div_t xy_min, xy_max;
 		thermapp_img_nuc(thermcal, &frame, uniform, !!dt.transient_steps, dt.temp_delta);
 		thermapp_img_bpr(thermcal, uniform);
-		thermapp_img_minmax(uniform, thermcal->img_w * thermcal->img_h, NULL, NULL, &i_min, &i_max, &t_min, &t_max, 20.0, 0.95);
+		thermapp_img_minmax(uniform, thermcal->img_w * thermcal->img_h, &meas_temps[0], &meas_temps[1], &i_min, &i_max);
+		thermapp_img_reflect(scale_temps_q, scale_temps_C, 2, t_refl_K, emissivity);
 		thermapp_img_quantize(quantized, uniform, thermcal->img_w * thermcal->img_h);
-		thermapp_img_quantize(scale_temps_q, scale_temps_cC, 2);
 		if (video_mode == VIDEO_MODE_ENHANCED) {
 			thermapp_img_hpf(quantized, thermcal->img_w, thermcal->img_h, enhanced_ratio);
 		}
@@ -392,9 +394,11 @@ main(int argc, char *argv[])
 
 		uint32_t frame_num = frame.header.frame_num_lo
 		                   | frame.header.frame_num_hi << 16;
-		float scale_temps[2];
-		thermapp_img_dequantize(scale_temps, scale_temps_q, 2);
-		printf("\rFrame #%" PRIu32 ":  FPA: %f C  Thermistor: %f C  Scale: [%f:%f]  Range: [%f:%f] @ (%d,%d):(%d,%d)", frame_num, dt.cur_temp_fpa, dt.cur_temp_therm, scale_temps[0] / 100.0f, scale_temps[1] / 100.0f, t_min, t_max, xy_min.rem, xy_min.quot, xy_max.rem, xy_max.quot);
+		float display_temps[4];
+		thermapp_img_dequantize(display_temps, scale_temps_q, 2);
+		thermapp_img_dereflect(display_temps, display_temps, 2, t_refl_K, emissivity);
+		thermapp_img_dereflect(display_temps + 2, meas_temps, 2, t_refl_K, emissivity);
+		printf("\rFrame #%" PRIu32 ":  FPA: %f C  Thermistor: %f C  Scale: [%f:%f]  Range: [%f:%f] @ (%d,%d):(%d,%d)", frame_num, dt.cur_temp_fpa, dt.cur_temp_therm, display_temps[0], display_temps[1], display_temps[2], display_temps[3], xy_min.rem, xy_min.quot, xy_max.rem, xy_max.quot);
 		fflush(stdout);
 
 		const uint16_t *in = quantized;

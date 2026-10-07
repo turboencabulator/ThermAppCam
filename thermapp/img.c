@@ -230,7 +230,7 @@ thermapp_img_bpr(const struct thermapp_cal *cal, float *io)
 }
 
 void
-thermapp_img_minmax(const float *in_px, size_t len, float *out_px_min, float *out_px_max, size_t *out_i_min, size_t *out_i_max, double *out_t_min, double *out_t_max, double t_refl, double emissivity)
+thermapp_img_minmax(const float *in_px, size_t len, float *out_px_min, float *out_px_max, size_t *out_i_min, size_t *out_i_max)
 {
 	float px_min, px_max;
 	size_t i_min, i_max;
@@ -249,26 +249,42 @@ thermapp_img_minmax(const float *in_px, size_t len, float *out_px_min, float *ou
 		}
 	}
 
-	// Assume measured energy is the sum of emitted and reflected energy:
-	//   x^4 = E*t^4 + R*r^4
-	// where:
-	//   x: NUC-corrected sensor data, K (measured, with units = 0.01 C)
-	//   t: object temperature, K
-	//   r: reflected temperature, K (chosen, default: 20 C = 293.15 K)
-	//   E: emissivity (chosen, default: 0.95)
-	//   R: reflectivity(?), 1-E
-	// Solving for t:
-	//   t = ((x^4 - R*r^4)/E)^0.25
-	double refl = (1.0 - emissivity) * pow(t_refl + 273.15, 4.0);
-	double t_min = pow((pow(px_min / 100.0 + 273.15, 4.0) - refl) / emissivity, 0.25) - 273.15;
-	double t_max = pow((pow(px_max / 100.0 + 273.15, 4.0) - refl) / emissivity, 0.25) - 273.15;
-
 	if (out_px_min) *out_px_min = px_min;
 	if (out_px_max) *out_px_max = px_max;
 	if (out_i_min) *out_i_min = i_min;
 	if (out_i_max) *out_i_max = i_max;
-	if (out_t_min) *out_t_min = t_min;
-	if (out_t_max) *out_t_max = t_max;
+}
+
+// Energy measured (at the camera) is the sum of energy emitted from,
+// reflected by, and transmitted through an object in the scene.  Energy is
+// the 4th power of temperature.
+//   m^4 = E*e^4 + R*r^4 + T*t^4
+// m, e, r, and t are the measured, emitted, reflected, and transmitted
+// temperatures, all absolute (i.e. in Kelvin).  Coefficients E, R, and T are
+// the proportion of each component, and they sum to 1.
+//
+// Assume T is 0; objects in the scene are opaque.  t is irrelevant.
+// E is the emissivity (chosen, default: 0.95).
+// R is the reflectivity(?), 1-E since E+R+T == 1 and T is 0.
+// r is the reflected temperature (chosen, default: 20 C = 293.15 K)
+// All of the above should vary pixel-by-pixel depending on the scene.
+// Solve for m or e to add or subtract the reflected energy.
+static double
+reflect(float t_emit_C, double e_refl, double emissivity)
+{
+	double t_emit_K = t_emit_C + 273.15;
+	double e_emit = emissivity * pow(t_emit_K, 4.0);
+	double t_meas_K = pow(e_emit + e_refl, 0.25);
+	return (t_meas_K - 273.15) * 100.0;
+}
+
+static double
+dereflect(float t_meas_cC, double e_refl, double emissivity)
+{
+	double t_meas_K = (t_meas_cC / 100.0) + 273.15;
+	double e_meas = pow(t_meas_K, 4.0);
+	double t_emit_K = pow((e_meas - e_refl) / emissivity, 0.25);
+	return t_emit_K - 273.15;
 }
 
 static unsigned
@@ -288,6 +304,24 @@ static float
 dequantize(unsigned temp_q)
 {
 	return (float)((int)temp_q - 5000);
+}
+
+void
+thermapp_img_reflect(uint16_t *out_q, const float *in_C, size_t len, double t_refl_K, double emissivity)
+{
+	double e_refl = (1.0 - emissivity) * pow(t_refl_K, 4.0);
+	while (len--) {
+		*out_q++ = quantize(reflect(*in_C++, e_refl, emissivity));
+	}
+}
+
+void
+thermapp_img_dereflect(float *out_C, const float *in_cC, size_t len, double t_refl_K, double emissivity)
+{
+	double e_refl = (1.0 - emissivity) * pow(t_refl_K, 4.0);
+	while (len--) {
+		*out_C++ = dereflect(*in_cC++, e_refl, emissivity);
+	}
 }
 
 void

@@ -230,7 +230,9 @@ void thermapp_temp_transient(struct thermapp_dev_temp *, const struct thermapp_c
 void thermapp_img_vgsk(const struct thermapp_cal *, const union thermapp_frame *, uint16_t *);
 void thermapp_img_nuc(const struct thermapp_cal *, const union thermapp_frame *, float *, int, float);
 void thermapp_img_bpr(const struct thermapp_cal *, float *);
-void thermapp_img_minmax(const float *, size_t, float *, float *, size_t *, size_t *, double *, double *, double, double);
+void thermapp_img_minmax(const float *, size_t, float *, float *, size_t *, size_t *);
+void thermapp_img_reflect(uint16_t *, const float *, size_t, double, double);
+void thermapp_img_dereflect(float *, const float *, size_t, double, double);
 void thermapp_img_quantize(uint16_t *, const float *, size_t);
 void thermapp_img_dequantize(float *, const uint16_t *, size_t);
 void thermapp_img_hpf(uint16_t *, size_t, size_t, float);

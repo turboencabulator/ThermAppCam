@@ -364,10 +364,10 @@ main(int argc, char *argv[])
 		float scale_min = -INFINITY, scale_max = INFINITY;
 		thermapp_img_nuc(thermcal, &frame, uniform, !!dt.transient_steps, dt.temp_delta);
 		thermapp_img_bpr(thermcal, uniform);
-		thermapp_img_minmax(thermcal, uniform, NULL, NULL, &i_min, &i_max, &t_min, &t_max, 20.0, 0.95);
-		thermapp_img_quantize(thermcal, uniform, quantized);
+		thermapp_img_minmax(uniform, thermcal->img_w * thermcal->img_h, NULL, NULL, &i_min, &i_max, &t_min, &t_max, 20.0, 0.95);
+		thermapp_img_quantize(quantized, uniform, thermcal->img_w * thermcal->img_h);
 		if (video_mode == VIDEO_MODE_ENHANCED) {
-			thermapp_img_hpf(thermcal, quantized, enhanced_ratio);
+			thermapp_img_hpf(quantized, thermcal->img_w, thermcal->img_h, enhanced_ratio);
 		}
 		if (video_mode == VIDEO_MODE_ENHANCED || thermcal->cur_set == CAL_SETS) {
 			// Image values won't make sense for manual scale truncation.
@@ -375,7 +375,7 @@ main(int argc, char *argv[])
 			scale_min = -INFINITY;
 			scale_max =  INFINITY;
 		}
-		thermapp_img_lut(thermcal, quantized, palette_index, &scale_min, &scale_max, 0.0f, 0.0f);
+		thermapp_img_lut(palette_index, quantized, thermcal->img_w * thermcal->img_h, &scale_min, &scale_max, 0.0f, 0.0f);
 
 		xy_min = div(i_min, thermcal->img_w);
 		xy_max = div(i_max, thermcal->img_w);

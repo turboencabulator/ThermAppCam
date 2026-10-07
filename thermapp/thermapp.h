@@ -230,10 +230,10 @@ void thermapp_temp_transient(struct thermapp_dev_temp *, const struct thermapp_c
 void thermapp_img_vgsk(const struct thermapp_cal *, const union thermapp_frame *, uint16_t *);
 void thermapp_img_nuc(const struct thermapp_cal *, const union thermapp_frame *, float *, int, float);
 void thermapp_img_bpr(const struct thermapp_cal *, float *);
-void thermapp_img_minmax(const struct thermapp_cal *, const float *, float *, float *, size_t *, size_t *, double *, double *, double, double);
-void thermapp_img_quantize(const struct thermapp_cal *, const float *, uint16_t *);
-void thermapp_img_hpf(const struct thermapp_cal *, uint16_t *, float);
-void thermapp_img_lut(const struct thermapp_cal *, const uint16_t *, uint8_t *, float *, float *, float, float);
+void thermapp_img_minmax(const float *, size_t, float *, float *, size_t *, size_t *, double *, double *, double, double);
+void thermapp_img_quantize(uint16_t *, const float *, size_t);
+void thermapp_img_hpf(uint16_t *, size_t, size_t, float);
+void thermapp_img_lut(uint8_t *, const uint16_t *, size_t, float *, float *, float, float);
 
 const uint32_t *thermapp_pal_select(const char *, uint32_t *);
 

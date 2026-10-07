@@ -230,14 +230,14 @@ thermapp_img_bpr(const struct thermapp_cal *cal, float *io)
 }
 
 void
-thermapp_img_minmax(const struct thermapp_cal *cal, const float *in_px, float *out_px_min, float *out_px_max, size_t *out_i_min, size_t *out_i_max, double *out_t_min, double *out_t_max, double t_refl, double emissivity)
+thermapp_img_minmax(const float *in_px, size_t len, float *out_px_min, float *out_px_max, size_t *out_i_min, size_t *out_i_max, double *out_t_min, double *out_t_max, double t_refl, double emissivity)
 {
 	float px_min, px_max;
 	size_t i_min, i_max;
 
 	px_min = px_max = *in_px++;
 	i_min = i_max = 0;
-	for (size_t i = 1; i < cal->img_w * cal->img_h; ++i) {
+	for (size_t i = 1; i < len; ++i) {
 		float px = *in_px++;
 		if (px_min > px) {
 			px_min = px;
@@ -291,15 +291,15 @@ dequantize(unsigned temp_q)
 }
 
 void
-thermapp_img_quantize(const struct thermapp_cal *cal, const float *in, uint16_t *out)
+thermapp_img_quantize(uint16_t *out, const float *in, size_t len)
 {
-	for (size_t i = cal->img_w * cal->img_h; i; --i) {
+	while (len--) {
 		*out++ = quantize(*in++);
 	}
 }
 
 void
-thermapp_img_hpf(const struct thermapp_cal *cal, uint16_t *io, float enhanced_ratio)
+thermapp_img_hpf(uint16_t *io, size_t w, size_t h, float enhanced_ratio)
 {
 	// Compute HPF(image) as image - LPF(image).
 	// LPF is computed as an exponential-weighted moving average across the image's pixels,
@@ -313,8 +313,6 @@ thermapp_img_hpf(const struct thermapp_cal *cal, uint16_t *io, float enhanced_ra
 	uint32_t alpha_scaled = alpha * (float)(1 << LPF_SCALE);
 	uint32_t beta_scaled = (1 << LPF_SCALE) - alpha_scaled;
 
-	size_t w = cal->img_w;
-	size_t h = cal->img_h;
 #define LPF_RES 2 // RES:1 input downsampling during LPF
 	size_t w_div = (w + LPF_RES - 1) / LPF_RES;
 	size_t h_div = (h + LPF_RES - 1) / LPF_RES;
@@ -396,13 +394,15 @@ thermapp_img_hpf(const struct thermapp_cal *cal, uint16_t *io, float enhanced_ra
 }
 
 void
-thermapp_img_lut(const struct thermapp_cal *cal, const uint16_t *in, uint8_t *lut, float *scale_lo, float *scale_hi, float ignore_ratio, float max_gain)
+thermapp_img_lut(uint8_t *lut, const uint16_t *in, size_t len, float *scale_lo, float *scale_hi, float ignore_ratio, float max_gain)
 {
 	unsigned bins[UINT16_MAX+1];
 	memset(bins, 0, sizeof bins);
 
+	unsigned ignore_px = ignore_ratio * len;
+
 	// Compute histogram.
-	for (size_t i = cal->img_w * cal->img_h; i; --i) {
+	while (len--) {
 		bins[*in++] += 1;
 	}
 
@@ -411,7 +411,6 @@ thermapp_img_lut(const struct thermapp_cal *cal, const uint16_t *in, uint8_t *lu
 	// but in practice should be [0.0f:0.5f) otherwise all bins are discarded.
 	// The app UI calls this "scale truncation" and offers values 0, 0.0001, 0.00025,
 	// and 0.0005 to 0.0150 in 0.0005 increments, with its own default of 0.0025.
-	unsigned ignore_px = ignore_ratio * (cal->img_w * cal->img_h);
 	size_t lo, hi;
 	if (isfinite(*scale_hi)) {
 		hi = quantize(*scale_hi * 100.0f);

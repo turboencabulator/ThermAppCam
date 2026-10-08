@@ -14,11 +14,10 @@
 #define SHIFT_B  0
 #define RGB(rrggbb) rrggbb
 
-// All palette_* functions can either modify and return their `buf` argument, or
-// can return a constant array.  All palette arrays currently have 256 elements.
-// Modify & return is preferred in case this length needs to change.
+// All palette arrays currently have 256 elements.
+// Static tables are NOT preferred in case this length needs to change.
 
-static const uint32_t *
+static void
 palette_whitehot(uint32_t *buf)
 {
 	// R' = G' = B' = i
@@ -27,10 +26,9 @@ palette_whitehot(uint32_t *buf)
 		       | i << SHIFT_G
 		       | i << SHIFT_B;
 	}
-	return buf;
 }
 
-static const uint32_t *
+static void
 palette_blackhot(uint32_t *buf)
 {
 	// R' = G' = B' = 255 - i
@@ -39,7 +37,6 @@ palette_blackhot(uint32_t *buf)
 		       | (UINT8_MAX - i) << SHIFT_G
 		       | (UINT8_MAX - i) << SHIFT_B;
 	}
-	return buf;
 }
 
 // These next palettes are defined as (piecewise) linear in the
@@ -47,7 +44,7 @@ palette_blackhot(uint32_t *buf)
 // https://blog.johnnovak.net/2016/09/21/what-every-coder-should-know-about-gamma/#gradients
 // https://en.wikipedia.org/wiki/Mach_bands
 
-static const uint32_t *
+static void
 palette_vivid(uint32_t *buf)
 {
 	// R' = i
@@ -58,10 +55,9 @@ palette_vivid(uint32_t *buf)
 		       | (UINT8_MAX - (i * (UINT8_MAX - i) >> 6)) << SHIFT_G
 		       | (UINT8_MAX - i)                          << SHIFT_B;
 	}
-	return buf;
 }
 
-static const uint32_t *
+static void
 palette_iron(uint32_t *buf)
 {
 	// Linear interpolate in R'G'B' space:
@@ -76,10 +72,9 @@ palette_iron(uint32_t *buf)
 		       | ((  0 * j) + (250 * i) + 0x80) >> 8 << SHIFT_G
 		       | ((154 * j) + (  0 * i) + 0x80) >> 8 << SHIFT_B;
 	}
-	return buf;
 }
 
-static const uint32_t *
+static void
 palette_rainbow(uint32_t *buf)
 {
 	// Linear interpolate in R'G'B' space:
@@ -108,10 +103,9 @@ palette_rainbow(uint32_t *buf)
 	while (i < 256) {
 		buf[i] = buf[i - 1] - (4 << SHIFT_R); i += 1;
 	}
-	return buf;
 }
 
-static const uint32_t *
+static void
 palette_psy(uint32_t *buf)
 {
 	// Linear interpolate in R'G'B' space:
@@ -155,11 +149,10 @@ palette_psy(uint32_t *buf)
 			b += db;
 		}
 	}
-	return buf;
 }
 
-static const uint32_t *
-palette_lava(void)
+static void
+palette_lava(uint32_t *buf)
 {
 	static const uint32_t lava[] = {
 		RGB(0x100002), RGB(0x110105), RGB(0x110108), RGB(0x12010b), RGB(0x13020f), RGB(0x130213), RGB(0x140217), RGB(0x14031b),
@@ -195,11 +188,11 @@ palette_lava(void)
 		RGB(0xffea7c), RGB(0xffec86), RGB(0xffee90), RGB(0xffef9a), RGB(0xfff1a3), RGB(0xfff2ac), RGB(0xfff4b6), RGB(0xfff5c0),
 		RGB(0xfff6c9), RGB(0xfff8d2), RGB(0xfff9da), RGB(0xfffae2), RGB(0xfffbe9), RGB(0xfffcef), RGB(0xfffdf5), RGB(0xfffefb),
 	};
-	return lava;
+	memcpy(buf, lava, sizeof lava);
 }
 
-static const uint32_t *
-palette_green(void)
+static void
+palette_green(uint32_t *buf)
 {
 	static const uint32_t green[] = {
 		RGB(0x100002), RGB(0x000000), RGB(0x000100), RGB(0x000300), RGB(0x000500), RGB(0x000700), RGB(0x000900), RGB(0x000a00),
@@ -235,10 +228,10 @@ palette_green(void)
 		RGB(0x9fe29f), RGB(0xa2e2a2), RGB(0xa5e3a5), RGB(0xa8e3a8), RGB(0xaae4aa), RGB(0xace4ac), RGB(0xafe4af), RGB(0xb4e5b4),
 		RGB(0xb9e5b9), RGB(0xbce6bc), RGB(0xc3e6c3), RGB(0xc6e6c6), RGB(0xc8e7c8), RGB(0xcde7cd), RGB(0xd2e8d2), RGB(0xd3e8d3),
 	};
-	return green;
+	memcpy(buf, green, sizeof green);
 }
 
-static const uint32_t *
+static void
 palette_ironbow(uint32_t *buf)
 {
 	// https://stackoverflow.com/questions/28495390/thermal-imaging-palette
@@ -265,33 +258,41 @@ palette_ironbow(uint32_t *buf)
 		       | (int)g << SHIFT_G
 		       | (int)b << SHIFT_B;
 	}
-	return buf;
 }
 
-const uint32_t *
-thermapp_pal_select(const char *name, uint32_t *buf)
+void
+(*thermapp_pal_select(const char *name))(uint32_t *)
 {
 	if (!name
 	 || strcmp(name, "whitehot") == 0) {
-		return palette_whitehot(buf);
+		return palette_whitehot;
 	} else if (strcmp(name, "blackhot") == 0) {
-		return palette_blackhot(buf);
+		return palette_blackhot;
 	} else if (strcmp(name, "vivid") == 0) {
-		return palette_vivid(buf);
+		return palette_vivid;
 	} else if (strcmp(name, "iron") == 0) {
-		return palette_iron(buf);
+		return palette_iron;
 	} else if (strcmp(name, "rainbow") == 0) {
-		return palette_rainbow(buf);
+		return palette_rainbow;
 	} else if (strcmp(name, "psy") == 0) {
-		return palette_psy(buf);
+		return palette_psy;
 	} else if (strcmp(name, "lava") == 0) {
-		return palette_lava();
+		return palette_lava;
 	} else if (strcmp(name, "green") == 0) {
-		return palette_green();
+		return palette_green;
 	} else if (strcmp(name, "ironbow") == 0) {
-		return palette_ironbow(buf);
+		return palette_ironbow;
 	} else {
 		return NULL;
+	}
+}
+
+void
+thermapp_pal_update(struct thermapp_pal_state *state, void (*gen)(uint32_t *))
+{
+	if (state->gen != gen) {
+		gen(state->colors);
+		state->gen = gen;
 	}
 }
 

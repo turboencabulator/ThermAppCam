@@ -215,12 +215,10 @@ main(int argc, char *argv[])
 	float scale_temps_C[2] = { 0.0f, 0.0f };
 	float ignore_ratio = 0.0f;
 	float max_gain = 0.0f;
-	uint8_t palette_index[UINT16_MAX+1];
-	memset(palette_index, 0, sizeof palette_index);
 
-	uint32_t palette_buf[UINT8_MAX+1];
-	const uint32_t *palette = thermapp_pal_select(palette_name, palette_buf);
-	if (!palette) {
+	struct thermapp_pal_state palette = { 0 };
+	void (*palette_gen)(uint32_t *) = thermapp_pal_select(palette_name);
+	if (!palette_gen) {
 		fprintf(stderr, "unrecognized palette %s\n", palette_name);
 		goto done;
 	}
@@ -381,7 +379,8 @@ main(int argc, char *argv[])
 		// Manual scale truncation enabled only when quantized can be converted to a temperature.
 		// TODO: Avoid displaying temperature values when disabled.
 		int manual_en = video_mode != VIDEO_MODE_ENHANCED && thermcal->cur_set != CAL_SETS;
-		thermapp_img_lut(palette_index, quantized, thermcal->img_w * thermcal->img_h, scale_temps_q, ignore_ratio, max_gain, manual_en && manual_lo, manual_en && manual_hi);
+		thermapp_img_lut(palette.index, quantized, thermcal->img_w * thermcal->img_h, scale_temps_q, ignore_ratio, max_gain, manual_en && manual_lo, manual_en && manual_hi);
+		thermapp_pal_update(&palette, palette_gen);
 		thermapp_pal_interpolate(scale, thermcal->img_w, scale_temps_q[0], scale_temps_q[1]);
 
 		xy_min = div(i_min, thermcal->img_w);
@@ -421,7 +420,7 @@ main(int argc, char *argv[])
 		}
 		for (size_t y = thermcal->img_h; y; --y) {
 			for (size_t x = thermcal->img_w; x; --x) {
-				*out = palette[palette_index[*in++]];
+				*out = palette.colors[palette.index[*in++]];
 				out += out_col_adj;
 			}
 			out += out_row_adj;
@@ -430,7 +429,7 @@ main(int argc, char *argv[])
 			out = (uint32_t *)img;
 			out += thermcal->img_w * (thermcal->img_h - 1);
 			for (size_t y = 0; y < thermcal->img_w; ++y) {
-				*out++ = palette[palette_index[scale[y]]];
+				*out++ = palette.colors[palette.index[scale[y]]];
 			}
 		}
 		write(fdwr, img, img_sz);

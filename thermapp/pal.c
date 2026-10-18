@@ -3,6 +3,7 @@
 
 #include "thermapp.h"
 
+#include <limits.h>
 #include <math.h>
 #include <string.h>
 
@@ -18,7 +19,7 @@
 // Static tables are NOT preferred in case this length needs to change.
 
 static void
-palette_whitehot(uint32_t *buf)
+palette_whitehot(uint32_t *buf, int thresh)
 {
 	// R' = G' = B' = i
 	for (size_t i = 0; i < UINT8_MAX+1; ++i) {
@@ -29,7 +30,7 @@ palette_whitehot(uint32_t *buf)
 }
 
 static void
-palette_blackhot(uint32_t *buf)
+palette_blackhot(uint32_t *buf, int thresh)
 {
 	// R' = G' = B' = 255 - i
 	for (size_t i = 0; i < UINT8_MAX+1; ++i) {
@@ -39,13 +40,109 @@ palette_blackhot(uint32_t *buf)
 	}
 }
 
+static void
+palette_blue(uint32_t *buf, int thresh)
+{
+	// Blue 255:80 followed by gray 0:255
+	// buf[thresh] is last blue (when thresh >= 0)
+	if (thresh > UINT8_MAX) thresh = UINT8_MAX;
+	else if (thresh < -1) thresh = -1;
+	int last = thresh;
+	int x = 0;
+	if (x <= last) {
+		int steps = last - x;
+		// slope = max(4, (255-80)/steps)
+		// y = 255 - round(slope*x)
+		if (steps < 44) { // slope == 4: (255-80)/steps >= 4 -> steps <= 43.75
+			do {
+				int y = UINT8_MAX - 4*x;
+				buf[x++] = y << SHIFT_B;
+			} while (x <= last);
+		} else { // slope < 4; round(a/b) implemented as floor((floor((2*a)/b)+1)/2) (half rounds up)
+			do {
+				int y = UINT8_MAX - (((2 * (UINT8_MAX - 80) * x) / steps) + 1) / 2;
+				buf[x++] = y << SHIFT_B;
+			} while (x <= last);
+		}
+	}
+	last = UINT8_MAX;
+	if (x <= last) {
+		int steps = last - x;
+		// slope = max(4, (255-0)/steps)
+		// y = 255 - round(slope*(255-x))
+		if (steps < 64) { // slope == 4: (255-0)/steps >= 4 -> steps <= 63.75
+			do {
+				int y = 4*x - 3*UINT8_MAX;
+				buf[x++] = y << SHIFT_R
+				         | y << SHIFT_G
+				         | y << SHIFT_B;
+			} while (x <= last);
+		} else { // slope < 4; round(a/b) implemented as floor((floor((2*a)/b)+1)/2) (half rounds up)
+			do {
+				int y = UINT8_MAX - (((2 * (UINT8_MAX - 0) * (UINT8_MAX - x)) / steps) + 1) / 2;
+				buf[x++] = y << SHIFT_R
+				         | y << SHIFT_G
+				         | y << SHIFT_B;
+			} while (x <= last);
+		}
+	}
+}
+
+static void
+palette_red(uint32_t *buf, int thresh)
+{
+	// Gray 0:255 followed by red 80:255
+	// buf[thresh] is first red (when thresh <= 255)
+	if (thresh > UINT8_MAX+1) thresh = UINT8_MAX+1;
+	else if (thresh < 0) thresh = 0;
+	int last = thresh - 1;
+	int x = 0;
+	if (x <= last) {
+		int steps = last - x;
+		// slope = max(4, (255-0)/steps)
+		// y = 0 + round(slope*x)
+		if (steps < 64) { // slope == 4: (255-0)/steps >= 4 -> steps <= 63.75
+			do {
+				int y = 4*x;
+				buf[x++] = y << SHIFT_R
+				         | y << SHIFT_G
+				         | y << SHIFT_B;
+			} while (x <= last);
+		} else { // slope < 4; round(a/b) implemented as floor((floor((2*a)/b)+1)/2) (half rounds up)
+			do {
+				int y = (((2 * (UINT8_MAX - 0) * x) / steps) + 1) / 2;
+				buf[x++] = y << SHIFT_R
+				         | y << SHIFT_G
+				         | y << SHIFT_B;
+			} while (x <= last);
+		}
+	}
+	last = UINT8_MAX;
+	if (x <= last) {
+		int steps = last - x;
+		// slope = max(4, (255-80)/steps)
+		// y = 255 - round(slope*(255-x))
+		if (steps < 44) { // slope == 4: (255-80)/steps >= 4 -> steps <= 43.75
+			do {
+				int color = 4*x - 3*UINT8_MAX;
+				buf[x++] = color << SHIFT_R;
+			} while (x <= last);
+		} else { // slope < 4; round(a/b) implemented as floor((floor((2*a)/b)+1)/2) (half rounds up)
+			do {
+				int color = UINT8_MAX - (((2 * (UINT8_MAX - 80) * (UINT8_MAX - x)) / steps) + 1) / 2;
+				buf[x++] = color << SHIFT_R;
+			} while (x <= last);
+		}
+	}
+}
+
 // These next palettes are defined as (piecewise) linear in the
 // non-linear R'G'B' space and therefore may not be perceptually uniform.
 // https://blog.johnnovak.net/2016/09/21/what-every-coder-should-know-about-gamma/#gradients
 // https://en.wikipedia.org/wiki/Mach_bands
 
 static void
-palette_vivid(uint32_t *buf)
+palette_vivid(uint32_t *buf, int thresh)
 {
 	// R' = i
 	// B' = 255 - R'
@@ -58,7 +155,7 @@ palette_vivid(uint32_t *buf)
 }
 
 static void
-palette_iron(uint32_t *buf)
+palette_iron(uint32_t *buf, int thresh)
 {
 	// Linear interpolate in R'G'B' space:
 	//   i    [0] [256*]
@@ -75,7 +172,7 @@ palette_iron(uint32_t *buf)
 }
 
 static void
-palette_rainbow(uint32_t *buf)
+palette_rainbow(uint32_t *buf, int thresh)
 {
 	// Linear interpolate in R'G'B' space:
 	//   i    [0]  [31]  [95] [159] [223] [255]
@@ -106,7 +203,7 @@ palette_rainbow(uint32_t *buf)
 }
 
 static void
-palette_psy(uint32_t *buf)
+palette_psy(uint32_t *buf, int thresh)
 {
 	// Linear interpolate in R'G'B' space:
 	//   i    [0]  [16]  [32]  [48]  [80] [112] [128] [144] [160] [176] [192] [240] [256*]
@@ -152,7 +249,7 @@ palette_psy(uint32_t *buf)
 }
 
 static void
-palette_lava(uint32_t *buf)
+palette_lava(uint32_t *buf, int thresh)
 {
 	static const uint32_t lava[] = {
 		RGB(0x100002), RGB(0x110105), RGB(0x110108), RGB(0x12010b), RGB(0x13020f), RGB(0x130213), RGB(0x140217), RGB(0x14031b),
@@ -192,7 +289,7 @@ palette_lava(uint32_t *buf)
 }
 
 static void
-palette_green(uint32_t *buf)
+palette_green(uint32_t *buf, int thresh)
 {
 	static const uint32_t green[] = {
 		RGB(0x100002), RGB(0x000000), RGB(0x000100), RGB(0x000300), RGB(0x000500), RGB(0x000700), RGB(0x000900), RGB(0x000a00),
@@ -232,7 +329,7 @@ palette_green(uint32_t *buf)
 }
 
 static void
-palette_ironbow(uint32_t *buf)
+palette_ironbow(uint32_t *buf, int thresh)
 {
 	// https://stackoverflow.com/questions/28495390/thermal-imaging-palette
 	static const double coeffs[3][6] = {
@@ -261,13 +358,17 @@ palette_ironbow(uint32_t *buf)
 }
 
 void
-(*thermapp_pal_select(const char *name))(uint32_t *)
+(*thermapp_pal_select(const char *name))(uint32_t *, int)
 {
 	if (!name
 	 || strcmp(name, "whitehot") == 0) {
 		return palette_whitehot;
 	} else if (strcmp(name, "blackhot") == 0) {
 		return palette_blackhot;
+	} else if (strcmp(name, "blue") == 0) {
+		return palette_blue;
+	} else if (strcmp(name, "red") == 0) {
+		return palette_red;
 	} else if (strcmp(name, "vivid") == 0) {
 		return palette_vivid;
 	} else if (strcmp(name, "iron") == 0) {
@@ -288,11 +389,26 @@ void
 }
 
 void
-thermapp_pal_update(struct thermapp_pal_state *state, void (*gen)(uint32_t *))
+thermapp_pal_update(struct thermapp_pal_state *state, void (*gen)(uint32_t *, int), const uint16_t *scale_temps)
 {
-	if (state->gen != gen) {
-		gen(state->colors);
+	if (state->gen == gen) {
+		if (!state->uses_thresh) {
+			return;
+		}
+	} else {
 		state->gen = gen;
+		state->uses_thresh = gen == palette_blue
+		                  || gen == palette_red;
+		state->thresh = INT_MIN;
+	}
+
+	int thresh = !state->uses_thresh ? 0
+	           : scale_temps[2] < scale_temps[0] ? -1
+	           : scale_temps[2] > scale_temps[1] ? UINT8_MAX+1
+	           : state->index[scale_temps[2]];
+	if (state->thresh != thresh) {
+		state->thresh = thresh;
+		gen(state->colors, thresh);
 	}
 }
 

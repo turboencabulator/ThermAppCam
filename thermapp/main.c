@@ -177,8 +177,8 @@ main(int argc, char *argv[])
 			printf("  -e[ratio]     Enhanced (\"night vision\") video mode\n");
 			printf("                Enhanced ratio: 0.25 to 5.0 [default: 1.25]\n");
 			printf("  -h            Show this help message and exit\n");
-			printf("  -p palette    Select the palette: whitehot [default], blackhot, green,\n");
-			printf("                iron, ironbow, vivid, lava, rainbow, psy\n");
+			printf("  -p palette    Select the palette: whitehot [default], blackhot, blue, red,\n");
+			printf("                green, iron, ironbow, vivid, lava, rainbow, psy\n");
 			goto done;
 		case 'p':
 			palette_name = optarg;
@@ -212,12 +212,12 @@ main(int argc, char *argv[])
 	int draw_scale = 0;
 	int manual_lo = 0;
 	int manual_hi = 0;
-	float scale_temps_C[2] = { 0.0f, 0.0f };
+	float scale_temps_C[3] = { 0.0f, 0.0f, 25.0f };
 	float ignore_ratio = 0.0f;
 	float max_gain = 0.0f;
 
 	struct thermapp_pal_state palette = { 0 };
-	void (*palette_gen)(uint32_t *) = thermapp_pal_select(palette_name);
+	void (*palette_gen)(uint32_t *, int) = thermapp_pal_select(palette_name);
 	if (!palette_gen) {
 		fprintf(stderr, "unrecognized palette %s\n", palette_name);
 		goto done;
@@ -364,14 +364,14 @@ main(int argc, char *argv[])
 		float uniform[FRAME_PIXELS_MAX];
 		uint16_t quantized[FRAME_PIXELS_MAX];
 		uint16_t scale[FRAME_WIDTH_MAX];
-		uint16_t scale_temps_q[2];
+		uint16_t scale_temps_q[3];
 		float meas_temps[2];
 		size_t i_min, i_max;
 		div_t xy_min, xy_max;
 		thermapp_img_nuc(thermcal, &frame, uniform, !!dt.transient_steps, dt.temp_delta);
 		thermapp_img_bpr(thermcal, uniform);
 		thermapp_img_minmax(uniform, thermcal->img_w * thermcal->img_h, &meas_temps[0], &meas_temps[1], &i_min, &i_max);
-		thermapp_img_reflect(scale_temps_q, scale_temps_C, 2, t_refl_K, emissivity);
+		thermapp_img_reflect(scale_temps_q, scale_temps_C, 3, t_refl_K, emissivity);
 		thermapp_img_quantize(quantized, uniform, thermcal->img_w * thermcal->img_h);
 		if (video_mode == VIDEO_MODE_ENHANCED) {
 			thermapp_img_hpf(quantized, thermcal->img_w, thermcal->img_h, enhanced_ratio);
@@ -380,7 +380,7 @@ main(int argc, char *argv[])
 		// TODO: Avoid displaying temperature values when disabled.
 		int manual_en = video_mode != VIDEO_MODE_ENHANCED && thermcal->cur_set != CAL_SETS;
 		thermapp_img_lut(palette.index, quantized, thermcal->img_w * thermcal->img_h, scale_temps_q, ignore_ratio, max_gain, manual_en && manual_lo, manual_en && manual_hi);
-		thermapp_pal_update(&palette, palette_gen);
+		thermapp_pal_update(&palette, palette_gen, scale_temps_q);
 		thermapp_pal_interpolate(scale, thermcal->img_w, scale_temps_q[0], scale_temps_q[1]);
 
 		xy_min = div(i_min, thermcal->img_w);

@@ -209,7 +209,9 @@ struct thermapp_pal_state {
 	uint32_t colors[UINT8_MAX+1]; // palette index -> color
 
 	// Whether to update colors
-	void (*gen)(uint32_t *);
+	void (*gen)(uint32_t *, int);
+	int uses_thresh;
+	int thresh;
 };
 
 
@@ -246,8 +248,8 @@ void thermapp_img_dequantize(float *, const uint16_t *, size_t);
 void thermapp_img_hpf(uint16_t *, size_t, size_t, float);
 void thermapp_img_lut(uint8_t *, const uint16_t *, size_t, uint16_t *, float, float, int, int);
 
-void (*thermapp_pal_select(const char *))(uint32_t *);
-void thermapp_pal_update(struct thermapp_pal_state *, void (*)(uint32_t *));
+void (*thermapp_pal_select(const char *))(uint32_t *, int);
+void thermapp_pal_update(struct thermapp_pal_state *, void (*)(uint32_t *, int), const uint16_t *);
 void thermapp_pal_interpolate(uint16_t *, size_t, uint16_t, uint16_t);
 
 #endif /* THERMAPP_H */

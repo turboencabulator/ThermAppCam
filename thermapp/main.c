@@ -177,8 +177,9 @@ main(int argc, char *argv[])
 			printf("  -e[ratio]     Enhanced (\"night vision\") video mode\n");
 			printf("                Enhanced ratio: 0.25 to 5.0 [default: 1.25]\n");
 			printf("  -h            Show this help message and exit\n");
-			printf("  -p palette    Select the palette: whitehot [default], blackhot, blue, red,\n");
-			printf("                green, iron, ironbow, vivid, lava, rainbow, psy\n");
+			printf("  -p palette    Select the palette: whitehot [default], blackhot, blue[@temp],\n");
+			printf("                red[@temp], green, iron, ironbow, vivid, lava, rainbow, psy\n");
+			printf("                Default threshold: 25 C for blue and red palettes\n");
 			goto done;
 		case 'p':
 			palette_name = optarg;
@@ -217,6 +218,13 @@ main(int argc, char *argv[])
 	float max_gain = 0.0f;
 
 	struct thermapp_pal_state palette = { 0 };
+	if (palette_name) {
+		char *thresh = strchr(palette_name, '@');
+		if (thresh) {
+			*thresh++ = '\0';
+			scale_temps_C[2] = strtof(thresh, NULL);
+		}
+	}
 	void (*palette_gen)(uint32_t *, int) = thermapp_pal_select(palette_name);
 	if (!palette_gen) {
 		fprintf(stderr, "unrecognized palette %s\n", palette_name);

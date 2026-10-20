@@ -413,8 +413,10 @@ thermapp_pal_update(struct thermapp_pal_state *state, void (*gen)(uint32_t *, in
 }
 
 void
-thermapp_pal_interpolate(uint16_t *buf, size_t len, uint16_t lo, uint16_t hi)
+thermapp_pal_interpolate(uint16_t *buf, size_t len, const uint16_t *scale_temps)
 {
+	uint16_t lo = scale_temps[0];
+	uint16_t hi = scale_temps[1];
 	float slope = (float)(hi - lo) / (float)(len - 1);
 	float start = (float)lo;
 	for (size_t x = 0; x < len; ++x) {

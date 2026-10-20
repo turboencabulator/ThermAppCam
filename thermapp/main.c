@@ -389,7 +389,7 @@ main(int argc, char *argv[])
 		int manual_en = video_mode != VIDEO_MODE_ENHANCED && thermcal->cur_set != CAL_SETS;
 		thermapp_img_lut(palette.index, quantized, thermcal->img_w * thermcal->img_h, scale_temps_q, ignore_ratio, max_gain, manual_en && manual_lo, manual_en && manual_hi);
 		thermapp_pal_update(&palette, palette_gen, scale_temps_q);
-		thermapp_pal_interpolate(scale, thermcal->img_w, scale_temps_q[0], scale_temps_q[1]);
+		thermapp_pal_interpolate(scale, thermcal->img_w, scale_temps_q);
 
 		xy_min = div(i_min, thermcal->img_w);
 		xy_max = div(i_max, thermcal->img_w);

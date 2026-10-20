@@ -473,7 +473,6 @@ thermapp_img_lut(uint8_t *lut, const uint16_t *in, size_t len, uint16_t *scale_t
 	}
 
 	// Number the non-empty bins in [lo:hi] from 1 to n.
-	// lo > hi implies n == 0 (but not vice-versa).
 	// TODO: Linear interpolate between lo and hi if one or both are fixed?
 	unsigned n = 0;
 	size_t i = 0;
@@ -484,6 +483,7 @@ thermapp_img_lut(uint8_t *lut, const uint16_t *in, size_t len, uint16_t *scale_t
 		if (bins[i]) n += 1;
 		bins[i++] = n;
 	}
+	n += 1;
 	while (i < UINT16_MAX+1) {
 		bins[i++] = n;
 	}
@@ -493,7 +493,7 @@ thermapp_img_lut(uint8_t *lut, const uint16_t *in, size_t len, uint16_t *scale_t
 #define LUT_SCALE 8
 #define LUT_RANGE_SCALED (((UINT8_MAX+1) << LUT_SCALE) - 1)
 	unsigned offset_scaled = 0;
-	unsigned gain_scaled = n ? LUT_RANGE_SCALED / n : 0;
+	unsigned gain_scaled = LUT_RANGE_SCALED / n;
 	unsigned max_gain_scaled = max_gain * (float)(1 << LUT_SCALE);
 	if (max_gain_scaled && gain_scaled > max_gain_scaled) {
 		gain_scaled = max_gain_scaled;
@@ -507,7 +507,7 @@ thermapp_img_lut(uint8_t *lut, const uint16_t *in, size_t len, uint16_t *scale_t
 		// These temperatures are the new scale lo/hi, but the app uses the
 		// original lo/hi for labeling the scale.  The portion of the scale
 		// between original and new will be a solid color (before filtering).
-		unsigned pad = total_gain_scaled ? ((hi - lo + 1) * offset_scaled) / total_gain_scaled : 0;
+		unsigned pad = ((hi - lo + 1) * offset_scaled) / total_gain_scaled;
 		int new_lo = (int)lo - (int)pad;
 		int new_hi = (int)hi + (int)pad;
 		lo = new_lo < 0 ? 0 : new_lo;

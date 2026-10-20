@@ -497,7 +497,21 @@ thermapp_img_lut(uint8_t *lut, const uint16_t *in, size_t len, uint16_t *scale_t
 	unsigned max_gain_scaled = max_gain * (float)(1 << LUT_SCALE);
 	if (max_gain_scaled && gain_scaled > max_gain_scaled) {
 		gain_scaled = max_gain_scaled;
-		offset_scaled = (LUT_RANGE_SCALED - (n * gain_scaled)) / 2;
+		unsigned total_gain_scaled = n * gain_scaled;
+		offset_scaled = (LUT_RANGE_SCALED - total_gain_scaled) / 2;
+
+		// Expand the range of temperatures in the scale:
+		// Extrapolate a line between points (x=lo, y=offset_scaled) and
+		// (x=hi, y=LUT_RANGE_SCALED-offset_scaled) until it intersects
+		// y=0 and y=LUT_RANGE_SCALED.  Find x at the two intersections.
+		// These temperatures are the new scale lo/hi, but the app uses the
+		// original lo/hi for labeling the scale.  The portion of the scale
+		// between original and new will be a solid color (before filtering).
+		unsigned pad = total_gain_scaled ? ((hi - lo + 1) * offset_scaled) / total_gain_scaled : 0;
+		int new_lo = (int)lo - (int)pad;
+		int new_hi = (int)hi + (int)pad;
+		lo = new_lo < 0 ? 0 : new_lo;
+		hi = new_hi > UINT16_MAX ? UINT16_MAX : new_hi;
 	}
 	for (size_t i = 0; i < UINT16_MAX+1; ++i) {
 		unsigned new = (gain_scaled * bins[i] + offset_scaled) >> LUT_SCALE;

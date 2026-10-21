@@ -471,6 +471,15 @@ thermapp_img_lut(uint8_t *lut, const uint16_t *in, size_t len, uint16_t *scale_t
 			ignored += bins[lo];
 		}
 	}
+	if (lo > hi) {
+		if (manual_lo < manual_hi) {
+			lo = hi;
+		} else if (manual_hi < manual_lo) {
+			hi = lo;
+		} else {
+			lo = hi = (lo + hi) / 2;
+		}
+	}
 
 	// Number the non-empty bins in [lo:hi] from 1 to n.
 	// TODO: Linear interpolate between lo and hi if one or both are fixed?
